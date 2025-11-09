@@ -29,6 +29,9 @@ jobs:
       - name: 📚 Install dependencies
         run: dart pub get
       
+      - name: 🔨 Generate code
+        run: dart run build_runner build --delete-conflicting-outputs
+      
       - name: 🔧 Setup environment
         env:
           JIRA_BASE_PATH: ${{ secrets.JIRA_BASE_PATH }}
