@@ -2,7 +2,6 @@
 /// Used by AI Teammate to determine if questions have been answered
 import '../core/jira/jira_client.dart';
 import '../core/jira/models/jira_ticket.dart';
-import '../core/jira/models/jira_comment.dart';
 
 /// Status of a ticket with questions
 class TicketAnswerStatus {
@@ -96,7 +95,19 @@ class AnswerChecker {
   
   /// Check if a single subtask has been answered
   Future<SubtaskAnswer> _checkSubtaskAnswer(JiraTicket subtask) async {
-    final comments = await jira.getComments(subtask.key!);
+    final subtaskKey = subtask.key;
+    
+    // Validate subtask has a non-empty key
+    if (subtaskKey.isEmpty) {
+      return SubtaskAnswer(
+        subtaskKey: 'EMPTY',
+        summary: subtask.fields.summary ?? 'No summary',
+        isAnswered: false,
+        answers: [],
+      );
+    }
+    
+    final comments = await jira.getComments(subtaskKey);
     
     // Skip the first comment (usually the AI's question)
     final userComments = comments.skip(1).toList();
@@ -112,7 +123,7 @@ class AnswerChecker {
     final lastComment = userComments.isNotEmpty ? userComments.last : null;
     
     return SubtaskAnswer(
-      subtaskKey: subtask.key!,
+      subtaskKey: subtaskKey,
       summary: subtask.fields.summary ?? 'No summary',
       isAnswered: isAnswered,
       answers: answers,

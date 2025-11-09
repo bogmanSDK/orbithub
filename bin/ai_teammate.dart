@@ -10,6 +10,13 @@ import 'dart:io';
 import '../lib/core/jira/jira_config.dart';
 import '../lib/core/jira/jira_client.dart';
 import '../lib/workflows/answer_checker.dart';
+import '../lib/ai/ai_provider.dart';
+import '../lib/ai/ai_factory.dart';
+
+// Constants for status transitions
+const statusInReview = ['review', 'in review', 'pending review'];
+const statusInProgress = ['progress', 'in progress', 'doing', 'development'];
+const statusToDo = ['to do', 'todo', 'open', 'backlog'];
 
 void main(List<String> args) async {
   print('🤖 OrbitHub AI Teammate\n');
@@ -47,11 +54,200 @@ void main(List<String> args) async {
     
     if (subtasks.isEmpty) {
       print('   ℹ️  No existing questions found');
-      print('\n🔍 Step 3: Analyzing ticket to generate questions...');
-      print('   ⚠️  AI integration not yet implemented');
-      print('   📝 TODO: Call OpenAI/Claude to analyze ticket and generate questions');
-      print('\n💡 For now, create questions manually in Jira');
-      exit(0);
+      print('\n🔍 Step 3: Generating questions with AI...');
+      
+      // Initialize AI
+      late final AIProvider ai;
+      try {
+        final aiConfig = AIConfig.fromEnvironment();
+        ai = AIFactory.create(aiConfig);
+        print('   ✅ AI Provider: ${aiConfig.provider.name}');
+        print('   ✅ Model: ${aiConfig.model ?? "default"}');
+      } catch (e) {
+        print('   ⚠️  AI not configured: $e');
+        print('   💡 Add AI_API_KEY to orbithub.env to enable AI');
+        print('   💡 For now, create questions manually in Jira');
+        exit(0);
+      }
+      
+      // Generate questions
+      try {
+        final questions = await ai.generateQuestions(
+          ticketTitle: ticket.fields.summary ?? 'No title',
+          ticketDescription: ticket.fields.description ?? '',
+          maxQuestions: 5,
+        );
+        
+        print('   ✅ AI Analysis complete');
+        
+        // Check if AI says everything is clear
+        if (questions.isEmpty) {
+          print('   ✅ Requirements are CLEAR - no questions needed!');
+          
+          // Post comment
+          print('\n💬 Step 4: Posting comment...');
+          final clearComment = '''
+🎉 **AI Analysis Complete**
+
+I've analyzed this ticket and the requirements are **clear and well-defined**.
+
+**Assessment:**
+✅ All necessary information is provided
+✅ Requirements are unambiguous
+✅ Ready to proceed with implementation
+
+**Next steps:**
+Moving this ticket to "In Progress" and beginning work immediately.
+
+_No clarification questions needed!_ 🚀
+''';
+          
+          await jira.postComment(ticketKey, clearComment, useMarkdown: true);
+          print('   ✅ Comment posted');
+          
+          // Move to In Progress
+          print('\n🔄 Step 5: Moving to "In Progress"...');
+          try {
+            final transitions = await jira.getTransitions(ticketKey);
+            final progressTransition = transitions.where((t) {
+              final toName = t.to?.name?.toLowerCase() ?? t.name?.toLowerCase() ?? '';
+              return statusInProgress.any((keyword) => toName.contains(keyword));
+            }).firstOrNull;
+            
+            if (progressTransition != null) {
+              final targetStatus = progressTransition.to?.name ?? progressTransition.name;
+              if (targetStatus != null) {
+                await jira.moveToStatus(ticketKey, targetStatus);
+                print('   ✅ Moved to "$targetStatus"');
+              } else {
+                print('   ⚠️  Could not determine target status');
+              }
+            } else {
+              print('   ⚠️  "In Progress" transition not available');
+            }
+          } catch (e) {
+            print('   ⚠️  Could not change status: $e');
+          }
+          
+          // Success summary
+          print('\n' + '=' * 60);
+          print('✨ READY FOR IMPLEMENTATION');
+          print('=' * 60);
+          print('\n📊 Summary:');
+          print('   Ticket: $ticketKey');
+          print('   Status: Clear requirements ✅');
+          print('   Action: Proceeding with implementation');
+          print('\n🔗 View ticket: ${jira.getTicketBrowseUrl(ticketKey)}');
+          print('\n💡 Next: AI will implement the feature (coming soon)');
+          
+          exit(0);
+        }
+        
+        // AI found unclear points - need questions
+        print('   ⚠️  Found ${questions.length} point(s) needing clarification');
+        
+        // Create subtasks for each question
+        print('\n📝 Step 4: Creating subtasks...');
+        final createdSubtasks = <String>[];
+        
+        for (var i = 0; i < questions.length; i++) {
+          final question = questions[i];
+          print('   Creating: $question');
+          
+          try {
+            final subtask = await jira.createSubtask(
+              parentKey: ticketKey,
+              summary: question,
+              description: 'Please provide details to help clarify the requirements.',
+            );
+            createdSubtasks.add(subtask.key);
+            print('   ✅ Created: ${subtask.key}');
+          } catch (e) {
+            print('   ⚠️  Failed to create subtask: $e');
+          }
+        }
+        
+        if (createdSubtasks.isEmpty) {
+          print('   ❌ Failed to create any subtasks');
+          exit(1);
+        }
+        
+        // Post comment
+        print('\n💬 Step 5: Posting comment...');
+        final comment = '''
+🤖 **AI Teammate Analysis**
+
+I've analyzed this ticket and have ${questions.length} clarifying question(s):
+
+${createdSubtasks.map((key) => '- $key').join('\n')}
+
+Please answer these questions so I can proceed with implementation.
+
+**Next steps:**
+1. Answer each subtask
+2. When ready, assign ticket back to me (AI Agent)
+3. Move status to "To Do"
+''';
+        
+        await jira.postComment(ticketKey, comment, useMarkdown: true);
+        print('   ✅ Comment posted');
+        
+        // Reassign to reporter
+        print('\n👤 Step 6: Reassigning ticket...');
+        final reporter = ticket.fields.reporter;
+        if (reporter != null && reporter.accountId != null) {
+          try {
+            await jira.assignTicket(ticketKey, reporter.accountId!);
+            print('   ✅ Assigned to: ${reporter.displayName}');
+          } catch (e) {
+            print('   ⚠️  Could not reassign: $e');
+          }
+        } else {
+          print('   ⚠️  No reporter found, skipping reassignment');
+        }
+        
+        // Move to In Review
+        print('\n🔄 Step 7: Moving to "In Review"...');
+        try {
+          final transitions = await jira.getTransitions(ticketKey);
+          final reviewTransition = transitions.where((t) {
+            final toName = t.to?.name?.toLowerCase() ?? t.name?.toLowerCase() ?? '';
+            return statusInReview.any((keyword) => toName.contains(keyword));
+          }).firstOrNull;
+          
+          if (reviewTransition != null) {
+            final targetStatus = reviewTransition.to?.name ?? reviewTransition.name;
+            if (targetStatus != null) {
+              await jira.moveToStatus(ticketKey, targetStatus);
+              print('   ✅ Moved to "$targetStatus"');
+            } else {
+              print('   ⚠️  Could not determine target status');
+            }
+          } else {
+            print('   ⚠️  "In Review" status not available');
+            print('   Available transitions: ${transitions.map((t) => t.name).join(", ")}');
+          }
+        } catch (e) {
+          print('   ⚠️  Could not change status: $e');
+        }
+        
+        // Success summary
+        print('\n' + '=' * 60);
+        print('✨ QUESTIONS CREATED SUCCESSFULLY');
+        print('=' * 60);
+        print('\n📊 Summary:');
+        print('   Ticket: $ticketKey');
+        print('   Questions created: ${createdSubtasks.length}');
+        print('   Status: Waiting for answers');
+        print('\n🔗 View ticket: ${jira.getTicketBrowseUrl(ticketKey)}');
+        print('\n💡 Next: Answer the subtasks, then assign back to AI Agent');
+        
+        exit(0);
+      } catch (e) {
+        print('   ❌ AI Error: $e');
+        print('   💡 Check your AI API key and try again');
+        exit(1);
+      }
     }
     
     print('   ✅ Found ${subtasks.length} existing question(s)');
@@ -115,7 +311,7 @@ ${answerStatus.allAnswered
     
     // Step 6: Collect answers
     print('\n📝 Step 6: Collecting answers...');
-    final answersText = checker.collectAnswersForAI(answerStatus);
+    // final answersText = checker.collectAnswersForAI(answerStatus);
     print('   ✅ Collected ${answerStatus.answeredQuestions} answer(s)');
     
     // Step 7: Generate implementation plan

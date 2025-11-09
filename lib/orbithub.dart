@@ -8,6 +8,12 @@ library orbithub;
 export 'core/jira/jira_client.dart';
 export 'core/jira/jira_config.dart';
 
+// AI exports
+export 'ai/ai_provider.dart';
+export 'ai/ai_factory.dart';
+export 'ai/openai_provider.dart';
+export 'ai/claude_provider.dart';
+
 // Models
 export 'core/jira/models/jira_ticket.dart';
 export 'core/jira/models/jira_fields.dart';

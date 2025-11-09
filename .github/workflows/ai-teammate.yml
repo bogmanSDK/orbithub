@@ -37,10 +37,33 @@ jobs:
           JIRA_BASE_PATH: ${{ secrets.JIRA_BASE_PATH }}
           JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
           JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          AI_PROVIDER: ${{ secrets.AI_PROVIDER }}
+          AI_API_KEY: ${{ secrets.AI_API_KEY }}
         run: |
+          # Validate required secrets
+          if [ -z "$JIRA_BASE_PATH" ]; then
+            echo "❌ Error: JIRA_BASE_PATH secret is not set"
+            exit 1
+          fi
+          if [ -z "$JIRA_EMAIL" ]; then
+            echo "❌ Error: JIRA_EMAIL secret is not set"
+            exit 1
+          fi
+          if [ -z "$JIRA_API_TOKEN" ]; then
+            echo "❌ Error: JIRA_API_TOKEN secret is not set"
+            exit 1
+          fi
+          if [ -z "$AI_API_KEY" ]; then
+            echo "⚠️  Warning: AI_API_KEY secret is not set"
+            echo "⚠️  AI features will be disabled"
+          fi
+          
+          # Create .env file
           echo "JIRA_BASE_PATH=$JIRA_BASE_PATH" >> .env
           echo "JIRA_EMAIL=$JIRA_EMAIL" >> .env
           echo "JIRA_API_TOKEN=$JIRA_API_TOKEN" >> .env
+          echo "AI_PROVIDER=${AI_PROVIDER:-openai}" >> .env
+          echo "AI_API_KEY=$AI_API_KEY" >> .env
           echo "✅ Environment configured"
       
       - name: 🤖 Run AI Teammate
@@ -48,6 +71,8 @@ jobs:
           JIRA_BASE_PATH: ${{ secrets.JIRA_BASE_PATH }}
           JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
           JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          AI_PROVIDER: ${{ secrets.AI_PROVIDER }}
+          AI_API_KEY: ${{ secrets.AI_API_KEY }}
         run: |
           # Get ticket key from either manual trigger or webhook
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then

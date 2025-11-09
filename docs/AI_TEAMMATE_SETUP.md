@@ -43,7 +43,15 @@ Value: your@email.com
 
 Name: JIRA_API_TOKEN
 Value: your_jira_api_token
+
+Name: AI_PROVIDER
+Value: openai
+
+Name: AI_API_KEY
+Value: sk-proj-...your_openai_key (or Claude key)
 ```
+
+> ⚠️ **Important**: All 5 secrets are required for the workflow to run!
 
 ### **Step 2: Create GitHub Personal Access Token**
 
