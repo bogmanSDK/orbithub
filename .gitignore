@@ -1,0 +1,37 @@
+# Dart
+.dart_tool/
+.packages
+build/
+pubspec.lock
+*.g.dart
+*.freezed.dart
+
+# IDE
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+
+# Environment
+.env
+.env.local
+config/*.local.yaml
+
+# OS
+.DS_Store
+*.swp
+*.swo
+
+# Logs
+*.log
+
+# Test coverage
+coverage/
+
+# Build outputs
+bin/*.exe
+bin/orbit
+bin/orbit.exe
+
+
