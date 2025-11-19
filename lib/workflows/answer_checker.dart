@@ -109,10 +109,11 @@ class AnswerChecker {
     
     final comments = await jira.getComments(subtaskKey);
     
-    // Skip the first comment (usually the AI's question)
-    final userComments = comments.skip(1).toList();
+    // Consider any comment as a potential answer
+    // (AI may not always post an initial comment if question is in description)
+    final userComments = comments.toList();
     
-    // Consider answered if there's at least one user comment
+    // Consider answered if there's at least one comment
     final isAnswered = userComments.isNotEmpty;
     
     final answers = userComments
