@@ -29,8 +29,7 @@ class JiraConfig {
     String? maxResultsStr;
     String? enableLoggingStr;
 
-    // Try to load from orbithub.env first, then .env
-    final orbithubEnvFile = File('orbithub.env');
+    // Try to load from .env file only (orbithub.env is just an example file)
     final envFile = File('.env');
     
     // Helper function to parse env file
@@ -50,19 +49,8 @@ class JiraConfig {
       return envMap;
     }
     
-    if (orbithubEnvFile.existsSync()) {
-      try {
-        final env = parseEnvFile(orbithubEnvFile);
-        baseUrl = env['JIRA_BASE_PATH'] ?? env['JIRA_BASE_URL'];
-        email = env['JIRA_EMAIL'];
-        apiToken = env['JIRA_API_TOKEN'];
-        maxResultsStr = env['JIRA_SEARCH_MAX_RESULTS'];
-        enableLoggingStr = env['JIRA_LOGGING_ENABLED'];
-      } catch (e) {
-        // If orbithub.env parsing fails, try .env
-        print('Warning: Failed to parse orbithub.env: $e');
-      }
-    } else if (envFile.existsSync()) {
+    // Load from .env file if it exists
+    if (envFile.existsSync()) {
       try {
         final env = parseEnvFile(envFile);
         baseUrl = env['JIRA_BASE_PATH'] ?? env['JIRA_BASE_URL'];

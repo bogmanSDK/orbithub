@@ -49,36 +49,32 @@ class AIConfig {
     String? temperatureStr = Platform.environment['AI_TEMPERATURE'];
     String? maxTokensStr = Platform.environment['AI_MAX_TOKENS'];
     
-    // If not in environment, try to read from .env files
+    // If not in environment, try to read from .env file only (orbithub.env is just an example)
     if (apiKey == null || apiKey.isEmpty) {
       try {
-        final envFiles = ['orbithub.env', '.env'];
-        for (final envFile in envFiles) {
-          final file = File(envFile);
-          if (file.existsSync()) {
-            final lines = file.readAsLinesSync();
-            for (final line in lines) {
-              if (line.trim().isEmpty || line.trim().startsWith('#')) continue;
+        final file = File('.env');
+        if (file.existsSync()) {
+          final lines = file.readAsLinesSync();
+          for (final line in lines) {
+            if (line.trim().isEmpty || line.trim().startsWith('#')) continue;
+            
+            final parts = line.split('=');
+            if (parts.length >= 2) {
+              final key = parts[0].trim();
+              final value = parts.sublist(1).join('=').trim();
               
-              final parts = line.split('=');
-              if (parts.length >= 2) {
-                final key = parts[0].trim();
-                final value = parts.sublist(1).join('=').trim();
-                
-                if (key == 'AI_PROVIDER' && (providerStr == null || providerStr.isEmpty)) {
-                  providerStr = value;
-                } else if (key == 'AI_API_KEY' && (apiKey == null || apiKey.isEmpty)) {
-                  apiKey = value;
-                } else if (key == 'AI_MODEL' && (model == null || model.isEmpty)) {
-                  model = value;
-                } else if (key == 'AI_TEMPERATURE' && (temperatureStr == null || temperatureStr.isEmpty)) {
-                  temperatureStr = value;
-                } else if (key == 'AI_MAX_TOKENS' && (maxTokensStr == null || maxTokensStr.isEmpty)) {
-                  maxTokensStr = value;
-                }
+              if (key == 'AI_PROVIDER' && (providerStr == null || providerStr.isEmpty)) {
+                providerStr = value;
+              } else if (key == 'AI_API_KEY' && (apiKey == null || apiKey.isEmpty)) {
+                apiKey = value;
+              } else if (key == 'AI_MODEL' && (model == null || model.isEmpty)) {
+                model = value;
+              } else if (key == 'AI_TEMPERATURE' && (temperatureStr == null || temperatureStr.isEmpty)) {
+                temperatureStr = value;
+              } else if (key == 'AI_MAX_TOKENS' && (maxTokensStr == null || maxTokensStr.isEmpty)) {
+                maxTokensStr = value;
               }
             }
-            break;
           }
         }
       } catch (e) {
