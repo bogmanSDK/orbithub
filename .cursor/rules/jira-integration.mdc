@@ -1,0 +1,505 @@
+---
+description: Jira API integration patterns for OrbitHub
+globs: **/jira/*.dart,**/jira_client.dart
+---
+
+# Jira Integration Patterns
+
+## Jira API Version
+
+- **API Version**: Jira REST API v3
+- **Base URL Format**: `https://your-domain.atlassian.net/rest/api/3`
+- **Authentication**: Basic Auth with email + API token
+
+## JiraClient Pattern
+
+### Client Structure
+```dart
+class JiraClient {
+  final Dio _dio;
+  final String baseUrl;
+  
+  JiraClient(JiraConfig config)
+      : baseUrl = '${config.baseUrl}/rest/api/3',
+        _dio = Dio(BaseOptions(
+          baseUrl: '${config.baseUrl}/rest/api/3',
+          headers: {
+            'Authorization': 'Basic ${config.encodedAuth}',
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+          validateStatus: (status) => status! < 500,
+        ));
+  
+  Future<void> close() async {
+    _dio.close();
+  }
+}
+```
+
+### Configuration Pattern
+```dart
+class JiraConfig {
+  final String baseUrl;
+  final String email;
+  final String apiToken;
+  
+  JiraConfig({
+    required this.baseUrl,
+    required this.email,
+    required this.apiToken,
+  });
+  
+  /// Load configuration from environment
+  factory JiraConfig.fromEnvironment() {
+    // Priority: .env file > environment variables
+    final dotenv = DotEnv()..load(['.env']);
+    
+    final baseUrl = dotenv['JIRA_BASE_URL'] ?? 
+                    Platform.environment['JIRA_BASE_URL'] ?? '';
+    final email = dotenv['JIRA_EMAIL'] ?? 
+                  Platform.environment['JIRA_EMAIL'] ?? '';
+    final apiToken = dotenv['JIRA_API_TOKEN'] ?? 
+                     Platform.environment['JIRA_API_TOKEN'] ?? '';
+    
+    if (baseUrl.isEmpty || email.isEmpty || apiToken.isEmpty) {
+      throw JiraConfigException('Missing required Jira configuration');
+    }
+    
+    return JiraConfig(
+      baseUrl: baseUrl,
+      email: email,
+      apiToken: apiToken,
+    );
+  }
+  
+  /// Get encoded Basic Auth credentials
+  String get encodedAuth {
+    final credentials = '$email:$apiToken';
+    return base64Encode(utf8.encode(credentials));
+  }
+}
+```
+
+## Exception Handling
+
+### Custom Exception Classes
+```dart
+class JiraException implements Exception {
+  final String message;
+  final int? statusCode;
+  final String? endpoint;
+  
+  JiraException(this.message, [this.statusCode, this.endpoint]);
+  
+  @override
+  String toString() {
+    final parts = ['JiraException'];
+    if (statusCode != null) parts.add('[$statusCode]');
+    parts.add(message);
+    if (endpoint != null) parts.add('(endpoint: $endpoint)');
+    return parts.join(' ');
+  }
+}
+
+class JiraNotFoundException extends JiraException {
+  JiraNotFoundException(String message, [String? endpoint])
+      : super(message, 404, endpoint);
+}
+
+class JiraAuthException extends JiraException {
+  JiraAuthException(String message, [String? endpoint])
+      : super(message, 401, endpoint);
+}
+
+class JiraPermissionException extends JiraException {
+  JiraPermissionException(String message, [String? endpoint])
+      : super(message, 403, endpoint);
+}
+
+class JiraConfigException implements Exception {
+  final String message;
+  
+  JiraConfigException(this.message);
+  
+  @override
+  String toString() => 'JiraConfigException: $message';
+}
+```
+
+### Error Handling Pattern
+```dart
+Future<T> _handleRequest<T>(
+  Future<Response> Function() request,
+  T Function(dynamic data) parser,
+  String operation,
+) async {
+  try {
+    final response = await request();
+    
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      return parser(response.data);
+    } else if (response.statusCode == 404) {
+      throw JiraNotFoundException('$operation: Resource not found');
+    } else if (response.statusCode == 401) {
+      throw JiraAuthException('$operation: Authentication failed');
+    } else if (response.statusCode == 403) {
+      throw JiraPermissionException('$operation: Permission denied');
+    } else {
+      throw JiraException(
+        '$operation failed',
+        response.statusCode,
+      );
+    }
+  } on DioException catch (e) {
+    if (e.type == DioExceptionType.connectionTimeout) {
+      throw JiraException('$operation: Connection timeout');
+    } else if (e.type == DioExceptionType.receiveTimeout) {
+      throw JiraException('$operation: Receive timeout');
+    } else {
+      throw JiraException('$operation: ${e.message}');
+    }
+  }
+}
+```
+
+## CRUD Operations
+
+### Get Ticket
+```dart
+Future<JiraTicket> getTicket(
+  String key, {
+  List<String> fields = const ['summary', 'description', 'status', 'assignee'],
+}) async {
+  return _handleRequest(
+    () => _dio.get(
+      '/issue/$key',
+      queryParameters: {'fields': fields.join(',')},
+    ),
+    (data) => JiraTicket.fromJson(data),
+    'Get ticket $key',
+  );
+}
+```
+
+### Create Ticket
+```dart
+Future<String> createTicket({
+  required String projectKey,
+  required String summary,
+  required String issueType,
+  String? description,
+  String? assignee,
+  Map<String, dynamic>? customFields,
+}) async {
+  final payload = {
+    'fields': {
+      'project': {'key': projectKey},
+      'summary': summary,
+      'issuetype': {'name': issueType},
+      if (description != null) 'description': _convertToADF(description),
+      if (assignee != null) 'assignee': {'id': assignee},
+      if (customFields != null) ...customFields,
+    },
+  };
+  
+  return _handleRequest(
+    () => _dio.post('/issue', data: payload),
+    (data) => data['key'] as String,
+    'Create ticket',
+  );
+}
+```
+
+### Update Ticket
+```dart
+Future<void> updateTicket(
+  String key,
+  Map<String, dynamic> fields,
+) async {
+  await _handleRequest(
+    () => _dio.put(
+      '/issue/$key',
+      data: {'fields': fields},
+    ),
+    (_) => null,
+    'Update ticket $key',
+  );
+}
+
+Future<void> updateDescription(
+  String key,
+  String description, {
+  bool useMarkdown = false,
+}) async {
+  final descriptionField = useMarkdown
+      ? _convertMarkdownToADF(description)
+      : _convertToADF(description);
+  
+  await updateTicket(key, {'description': descriptionField});
+}
+```
+
+### Delete Ticket
+```dart
+Future<void> deleteTicket(String key) async {
+  await _handleRequest(
+    () => _dio.delete('/issue/$key'),
+    (_) => null,
+    'Delete ticket $key',
+  );
+}
+```
+
+## Subtask Operations
+
+### Get Subtasks
+```dart
+Future<List<JiraTicket>> getSubtasks(String parentKey) async {
+  final parent = await getTicket(parentKey, fields: ['subtasks']);
+  final subtaskKeys = (parent.fields.subtasks ?? [])
+      .map((s) => s.key)
+      .toList();
+  
+  if (subtaskKeys.isEmpty) return [];
+  
+  final subtasks = <JiraTicket>[];
+  for (final key in subtaskKeys) {
+    final subtask = await getTicket(key);
+    subtasks.add(subtask);
+  }
+  
+  return subtasks;
+}
+```
+
+### Create Subtask
+```dart
+Future<String> createSubtask({
+  required String parentKey,
+  required String summary,
+  String? description,
+}) async {
+  final payload = {
+    'fields': {
+      'project': {'key': _extractProjectKey(parentKey)},
+      'parent': {'key': parentKey},
+      'summary': summary,
+      'issuetype': {'name': 'Subtask'},
+      if (description != null) 'description': _convertToADF(description),
+    },
+  };
+  
+  return _handleRequest(
+    () => _dio.post('/issue', data: payload),
+    (data) => data['key'] as String,
+    'Create subtask for $parentKey',
+  );
+}
+
+String _extractProjectKey(String ticketKey) {
+  return ticketKey.split('-').first;
+}
+```
+
+## Comment Operations
+
+### Get Comments
+```dart
+Future<List<JiraComment>> getComments(String issueKey) async {
+  return _handleRequest(
+    () => _dio.get('/issue/$issueKey/comment'),
+    (data) {
+      final comments = data['comments'] as List;
+      return comments.map((c) => JiraComment.fromJson(c)).toList();
+    },
+    'Get comments for $issueKey',
+  );
+}
+```
+
+### Add Comment
+```dart
+Future<void> addComment(String issueKey, String comment) async {
+  await _handleRequest(
+    () => _dio.post(
+      '/issue/$issueKey/comment',
+      data: {
+        'body': _convertToADF(comment),
+      },
+    ),
+    (_) => null,
+    'Add comment to $issueKey',
+  );
+}
+```
+
+## Transition Operations
+
+### Get Transitions
+```dart
+Future<List<JiraTransition>> getTransitions(String issueKey) async {
+  return _handleRequest(
+    () => _dio.get('/issue/$issueKey/transitions'),
+    (data) {
+      final transitions = data['transitions'] as List;
+      return transitions.map((t) => JiraTransition.fromJson(t)).toList();
+    },
+    'Get transitions for $issueKey',
+  );
+}
+```
+
+### Transition Ticket
+```dart
+Future<void> transitionTicket(
+  String issueKey,
+  String transitionName,
+) async {
+  final transitions = await getTransitions(issueKey);
+  final transition = transitions.firstWhere(
+    (t) => t.name.toLowerCase() == transitionName.toLowerCase(),
+    orElse: () => throw JiraException(
+      'Transition "$transitionName" not found for $issueKey',
+    ),
+  );
+  
+  await _handleRequest(
+    () => _dio.post(
+      '/issue/$issueKey/transitions',
+      data: {
+        'transition': {'id': transition.id},
+      },
+    ),
+    (_) => null,
+    'Transition $issueKey to $transitionName',
+  );
+}
+```
+
+## Search Operations
+
+### Search with JQL
+```dart
+Future<List<JiraTicket>> searchTickets(
+  String jql, {
+  List<String> fields = const ['summary', 'description', 'status'],
+  int maxResults = 50,
+}) async {
+  if (jql.trim().isEmpty) {
+    throw JiraException('JQL query cannot be empty');
+  }
+  
+  return _handleRequest(
+    () => _dio.get(
+      '/search',
+      queryParameters: {
+        'jql': jql,
+        'fields': fields.join(','),
+        'maxResults': maxResults,
+      },
+    ),
+    (data) {
+      final issues = data['issues'] as List;
+      return issues.map((i) => JiraTicket.fromJson(i)).toList();
+    },
+    'Search tickets with JQL',
+  );
+}
+```
+
+## Field Formatting
+
+### Convert to ADF (Atlassian Document Format)
+```dart
+Map<String, dynamic> _convertToADF(String text) {
+  return {
+    'type': 'doc',
+    'version': 1,
+    'content': [
+      {
+        'type': 'paragraph',
+        'content': [
+          {
+            'type': 'text',
+            'text': text,
+          },
+        ],
+      },
+    ],
+  };
+}
+```
+
+### Convert Markdown to ADF
+```dart
+Map<String, dynamic> _convertMarkdownToADF(String markdown) {
+  // Simple markdown to ADF conversion
+  // For complex markdown, consider using a library
+  final lines = markdown.split('\n');
+  final content = <Map<String, dynamic>>[];
+  
+  for (final line in lines) {
+    if (line.trim().isEmpty) continue;
+    
+    if (line.startsWith('# ')) {
+      content.add({
+        'type': 'heading',
+        'attrs': {'level': 1},
+        'content': [{'type': 'text', 'text': line.substring(2)}],
+      });
+    } else if (line.startsWith('## ')) {
+      content.add({
+        'type': 'heading',
+        'attrs': {'level': 2},
+        'content': [{'type': 'text', 'text': line.substring(3)}],
+      });
+    } else {
+      content.add({
+        'type': 'paragraph',
+        'content': [{'type': 'text', 'text': line}],
+      });
+    }
+  }
+  
+  return {
+    'type': 'doc',
+    'version': 1,
+    'content': content,
+  };
+}
+```
+
+## Best Practices
+
+### Rate Limiting
+```dart
+// Add rate limiting for bulk operations
+Future<void> bulkUpdate(List<String> ticketKeys) async {
+  for (final key in ticketKeys) {
+    await updateTicket(key, {'status': 'Done'});
+    await Future.delayed(Duration(milliseconds: 100)); // Rate limiting
+  }
+}
+```
+
+### Resource Cleanup
+```dart
+// Always close the client when done
+try {
+  final jira = JiraClient(config);
+  await jira.getTicket('KEY-123');
+} finally {
+  await jira.close();
+}
+```
+
+### Field Validation
+```dart
+// Validate required fields before API calls
+void _validateTicketKey(String key) {
+  if (key.isEmpty || !key.contains('-')) {
+    throw JiraException('Invalid ticket key: $key');
+  }
+}
+```

@@ -1,0 +1,252 @@
+---
+alwaysApply: true
+description: Dart coding style and patterns for OrbitHub project
+---
+
+# Dart Coding Style & Execution Rules
+
+## Dart Version & Configuration
+
+- **Dart Version**: Dart SDK 3.x+
+- **Package Manager**: pub
+- **Testing Framework**: test package
+- **HTTP Client**: dio for HTTP requests
+- **JSON Serialization**: Built-in dart:convert + json_serializable
+
+## Coding Style Standards
+
+### Package Structure
+- Use feature-based organization under `lib/`
+- Separate concerns: `core/`, `ai/`, `workflows/`
+- Place interfaces/abstract classes in appropriate directories
+- Models in `models/` subdirectories
+
+### Naming Conventions
+- **Classes**: PascalCase (e.g., `JiraClient`, `AIProvider`)
+- **Files**: snake_case (e.g., `jira_client.dart`, `ai_provider.dart`)
+- **Methods**: camelCase with descriptive names
+- **Constants**: lowerCamelCase or UPPER_SNAKE_CASE for compile-time constants
+- **Private members**: Prefix with underscore (`_privateMethod`)
+
+### Method Design
+- Use meaningful method names that describe functionality
+- Prefer named parameters for optional parameters
+- Use `required` keyword for mandatory named parameters
+- Include proper dartdoc comments for public APIs
+- Use `@override` annotation consistently
+
+### Error Handling
+- Create custom exception classes (e.g., `JiraException`, `AIException`)
+- Include meaningful error messages with context
+- Use try-catch for recoverable errors
+- Log errors appropriately
+
+### Documentation
+- Add dartdoc comments for public classes and methods
+- Include parameter descriptions with `[paramName]` notation
+- Use `///` for documentation comments, not `//`
+- Document any async concerns or side effects
+
+## Code Organization
+
+### File Structure Pattern
+```dart
+// 1. Imports (dart, flutter, package, relative)
+import 'dart:io';
+import 'package:dio/dio.dart';
+import 'models/jira_ticket.dart';
+
+// 2. Class documentation
+/// Brief description.
+///
+/// Detailed description if needed.
+class MyClass {
+  // 3. Private fields
+  final String _apiKey;
+  
+  // 4. Public fields
+  final String baseUrl;
+  
+  // 5. Constructor(s)
+  MyClass({
+    required this.baseUrl,
+    required String apiKey,
+  }) : _apiKey = apiKey;
+  
+  // 6. Public methods
+  Future<Result> publicMethod() async {
+    // implementation
+  }
+  
+  // 7. Private methods
+  String _privateHelper() {
+    // implementation
+  }
+}
+```
+
+### Async/Await Pattern
+```dart
+// ✅ GOOD - Proper async handling
+Future<Ticket> getTicket(String key) async {
+  try {
+    final response = await _dio.get('/ticket/$key');
+    return Ticket.fromJson(response.data);
+  } on DioException catch (e) {
+    throw JiraException('Failed to get ticket: ${e.message}');
+  }
+}
+
+// ❌ BAD - Missing error handling
+Future<Ticket> getTicket(String key) async {
+  final response = await _dio.get('/ticket/$key');
+  return Ticket.fromJson(response.data);
+}
+```
+
+## Test Execution
+
+### Unit Tests
+```bash
+# Run all tests
+dart test
+
+# Run specific test file
+dart test test/jira_client_test.dart
+
+# Run tests with coverage
+dart test --coverage=coverage
+dart pub global activate coverage
+dart pub global run coverage:format_coverage --lcov --in=coverage --out=coverage/lcov.info --report-on=lib
+```
+
+### Test Structure
+```bash
+test/
+├── core/
+│   ├── jira/
+│   │   ├── jira_client_test.dart
+│   │   └── jira_config_test.dart
+│   └── ...
+├── ai/
+│   ├── openai_provider_test.dart
+│   └── claude_provider_test.dart
+└── workflows/
+    └── answer_checker_test.dart
+```
+
+## Code Quality Requirements
+
+### Mandatory Practices
+- **Test Coverage**: ALL business logic MUST be covered by tests
+- **Error Handling**: Include appropriate error handling for all external calls
+- **Null Safety**: Leverage Dart's null safety features
+- **Immutability**: Prefer `final` for variables that don't change
+- **Type Safety**: Avoid `dynamic` unless absolutely necessary
+
+### Code Review Checklist
+- [ ] All public methods have tests
+- [ ] Error cases are tested and handled
+- [ ] Null safety is properly utilized
+- [ ] No hardcoded values or magic strings
+- [ ] Proper use of async/await
+- [ ] Resource cleanup is handled (close() methods)
+- [ ] Documentation is clear and complete
+
+## Common Patterns
+
+### Factory Constructors
+```dart
+class AIFactory {
+  static AIProvider create(AIConfig config) {
+    switch (config.provider) {
+      case 'openai':
+        return OpenAIProvider(config);
+      case 'claude':
+        return ClaudeProvider(config);
+      default:
+        throw Exception('Unknown provider: ${config.provider}');
+    }
+  }
+}
+```
+
+### Configuration Loading
+```dart
+class Config {
+  static Config fromEnvironment() {
+    final dotenv = DotEnv()..load(['.env']);
+    return Config(
+      apiKey: dotenv['API_KEY'] ?? Platform.environment['API_KEY'] ?? '',
+      baseUrl: dotenv['BASE_URL'] ?? Platform.environment['BASE_URL'] ?? '',
+    );
+  }
+}
+```
+
+### HTTP Client Pattern
+```dart
+class JiraClient {
+  final Dio _dio;
+  
+  JiraClient(JiraConfig config)
+      : _dio = Dio(BaseOptions(
+          baseUrl: config.baseUrl,
+          headers: {
+            'Authorization': 'Basic ${config.encodedAuth}',
+            'Content-Type': 'application/json',
+          },
+        ));
+  
+  Future<void> close() async {
+    _dio.close();
+  }
+}
+```
+
+## Linting and Analysis
+
+### Analysis Options
+- Follow `analysis_options.yaml` rules strictly
+- Run `dart analyze` before committing
+- Fix all lint warnings and errors
+- Use `dart format` for consistent formatting
+
+### Pre-commit Checklist
+```bash
+# Format code
+dart format lib/ bin/ test/
+
+# Analyze code
+dart analyze
+
+# Run tests
+dart test
+
+# Check for outdated dependencies
+dart pub outdated
+```
+
+## Performance Considerations
+
+- Use `const` constructors when possible
+- Avoid unnecessary rebuilds/recomputations
+- Close streams and HTTP clients properly
+- Use `Completer` for single-value futures
+- Consider using `Stream` for continuous data
+
+## Build and Run
+
+```bash
+# Get dependencies
+dart pub get
+
+# Run main script
+dart run bin/orbit.dart
+
+# Run AI Teammate
+dart run bin/ai_teammate.dart TICKET-KEY
+
+# Build executable
+dart compile exe bin/orbit.dart -o build/orbit
+```

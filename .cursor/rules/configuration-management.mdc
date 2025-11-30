@@ -1,0 +1,429 @@
+---
+description: Configuration loading patterns for OrbitHub
+globs: **/*config.dart,**/*_config.dart
+---
+
+# Configuration Management
+
+## Configuration Priority
+
+OrbitHub uses the following configuration loading priority:
+
+**Priority Order (Highest to Lowest):**
+1. `.env` file (local development)
+2. Environment variables (system/CI/CD)
+3. Default values (fallback)
+
+**IMPORTANT:** `orbithub.env` is ONLY an example template. It should NEVER be loaded by the application.
+
+## Configuration Pattern
+
+### Standard Config Class
+```dart
+class MyConfig {
+  final String apiKey;
+  final String baseUrl;
+  final int timeout;
+  
+  MyConfig({
+    required this.apiKey,
+    required this.baseUrl,
+    this.timeout = 30000,
+  });
+  
+  /// Load configuration from environment
+  /// Priority: .env file > environment variables > defaults
+  factory MyConfig.fromEnvironment() {
+    // 1. Try to load .env file first
+    final dotenv = DotEnv();
+    try {
+      dotenv.load(['.env']);
+    } catch (e) {
+      // .env doesn't exist, will use environment variables
+    }
+    
+    // 2. Get values with priority: .env > env vars > defaults
+    final apiKey = dotenv['API_KEY'] ?? 
+                   Platform.environment['API_KEY'] ?? 
+                   '';
+    
+    final baseUrl = dotenv['BASE_URL'] ?? 
+                    Platform.environment['BASE_URL'] ?? 
+                    'https://default.example.com';
+    
+    final timeout = int.tryParse(
+      dotenv['TIMEOUT'] ?? Platform.environment['TIMEOUT'] ?? '30000'
+    ) ?? 30000;
+    
+    // 3. Validate required fields
+    if (apiKey.isEmpty) {
+      throw ConfigException('API_KEY is required. Add it to .env file.');
+    }
+    
+    return MyConfig(
+      apiKey: apiKey,
+      baseUrl: baseUrl,
+      timeout: timeout,
+    );
+  }
+}
+```
+
+## Jira Configuration
+
+### JiraConfig Pattern
+```dart
+class JiraConfig {
+  final String baseUrl;
+  final String email;
+  final String apiToken;
+  
+  JiraConfig({
+    required this.baseUrl,
+    required this.email,
+    required this.apiToken,
+  });
+  
+  factory JiraConfig.fromEnvironment() {
+    final dotenv = DotEnv();
+    try {
+      dotenv.load(['.env']);
+    } catch (e) {
+      // Continue with environment variables only
+    }
+    
+    final baseUrl = dotenv['JIRA_BASE_URL'] ?? 
+                    Platform.environment['JIRA_BASE_URL'] ?? 
+                    '';
+    
+    final email = dotenv['JIRA_EMAIL'] ?? 
+                  Platform.environment['JIRA_EMAIL'] ?? 
+                  '';
+    
+    final apiToken = dotenv['JIRA_API_TOKEN'] ?? 
+                     Platform.environment['JIRA_API_TOKEN'] ?? 
+                     '';
+    
+    // Validate
+    if (baseUrl.isEmpty) {
+      throw JiraConfigException('JIRA_BASE_URL is required');
+    }
+    if (email.isEmpty) {
+      throw JiraConfigException('JIRA_EMAIL is required');
+    }
+    if (apiToken.isEmpty) {
+      throw JiraConfigException('JIRA_API_TOKEN is required');
+    }
+    
+    return JiraConfig(
+      baseUrl: baseUrl,
+      email: email,
+      apiToken: apiToken,
+    );
+  }
+  
+  String get encodedAuth {
+    final credentials = '$email:$apiToken';
+    return base64Encode(utf8.encode(credentials));
+  }
+}
+```
+
+## AI Configuration
+
+### AIConfig Pattern
+```dart
+class AIConfig {
+  final String provider; // 'openai' or 'claude'
+  final String apiKey;
+  final String? model;
+  final double temperature;
+  final int maxTokens;
+  
+  AIConfig({
+    required this.provider,
+    required this.apiKey,
+    this.model,
+    this.temperature = 0.7,
+    this.maxTokens = 4000,
+  });
+  
+  factory AIConfig.fromEnvironment() {
+    final dotenv = DotEnv();
+    try {
+      dotenv.load(['.env']);
+    } catch (e) {
+      // Continue with environment variables
+    }
+    
+    final provider = (dotenv['AI_PROVIDER'] ?? 
+                     Platform.environment['AI_PROVIDER'] ?? 
+                     'openai').toLowerCase();
+    
+    final apiKey = dotenv['AI_API_KEY'] ?? 
+                   Platform.environment['AI_API_KEY'] ?? 
+                   '';
+    
+    final model = dotenv['AI_MODEL'] ?? 
+                  Platform.environment['AI_MODEL'];
+    
+    final temperature = double.tryParse(
+      dotenv['AI_TEMPERATURE'] ?? 
+      Platform.environment['AI_TEMPERATURE'] ?? 
+      '0.7'
+    ) ?? 0.7;
+    
+    final maxTokens = int.tryParse(
+      dotenv['AI_MAX_TOKENS'] ?? 
+      Platform.environment['AI_MAX_TOKENS'] ?? 
+      '4000'
+    ) ?? 4000;
+    
+    // Validate
+    if (apiKey.isEmpty) {
+      throw AIConfigException('AI_API_KEY is required');
+    }
+    
+    if (provider != 'openai' && provider != 'claude') {
+      throw AIConfigException('AI_PROVIDER must be "openai" or "claude"');
+    }
+    
+    return AIConfig(
+      provider: provider,
+      apiKey: apiKey,
+      model: model,
+      temperature: temperature,
+      maxTokens: maxTokens,
+    );
+  }
+}
+```
+
+## Environment File Structure
+
+### `.env` (User's actual configuration)
+```bash
+# Jira Configuration
+JIRA_BASE_URL=https://your-domain.atlassian.net
+JIRA_EMAIL=your.email@example.com
+JIRA_API_TOKEN=your_actual_jira_api_token
+
+# AI Configuration
+AI_PROVIDER=openai
+AI_API_KEY=sk-your_actual_openai_api_key
+AI_MODEL=gpt-4
+AI_TEMPERATURE=0.7
+AI_MAX_TOKENS=4000
+
+# Optional
+TIMEOUT=30000
+DEBUG=false
+```
+
+### `orbithub.env` (Template ONLY - never loaded)
+```bash
+# This is a TEMPLATE file for documentation purposes only
+# Copy this to .env and fill in your actual values
+# DO NOT put real credentials here!
+
+# Jira Configuration
+JIRA_BASE_URL=https://your-domain.atlassian.net
+JIRA_EMAIL=your.email@example.com
+JIRA_API_TOKEN=your_jira_api_token_here
+
+# AI Configuration
+AI_PROVIDER=openai  # or 'claude'
+AI_API_KEY=your_api_key_here
+AI_MODEL=gpt-4  # or 'claude-3-5-sonnet-20241022'
+AI_TEMPERATURE=0.7
+AI_MAX_TOKENS=4000
+```
+
+## Configuration Validation
+
+### Validation Pattern
+```dart
+class ConfigValidator {
+  static void validateJiraConfig(JiraConfig config) {
+    if (!config.baseUrl.startsWith('https://')) {
+      throw JiraConfigException('JIRA_BASE_URL must start with https://');
+    }
+    
+    if (!config.email.contains('@')) {
+      throw JiraConfigException('JIRA_EMAIL must be a valid email');
+    }
+    
+    if (config.apiToken.length < 10) {
+      throw JiraConfigException('JIRA_API_TOKEN seems invalid (too short)');
+    }
+  }
+  
+  static void validateAIConfig(AIConfig config) {
+    if (config.provider == 'openai' && !config.apiKey.startsWith('sk-')) {
+      throw AIConfigException('OpenAI API key should start with "sk-"');
+    }
+    
+    if (config.temperature < 0 || config.temperature > 2) {
+      throw AIConfigException('AI_TEMPERATURE must be between 0 and 2');
+    }
+    
+    if (config.maxTokens < 100 || config.maxTokens > 100000) {
+      throw AIConfigException('AI_MAX_TOKENS must be between 100 and 100000');
+    }
+  }
+}
+```
+
+## Exception Classes
+
+### Config Exceptions
+```dart
+class ConfigException implements Exception {
+  final String message;
+  
+  ConfigException(this.message);
+  
+  @override
+  String toString() => 'ConfigException: $message';
+}
+
+class JiraConfigException extends ConfigException {
+  JiraConfigException(String message) : super(message);
+  
+  @override
+  String toString() => 'JiraConfigException: $message';
+}
+
+class AIConfigException extends ConfigException {
+  AIConfigException(String message) : super(message);
+  
+  @override
+  String toString() => 'AIConfigException: $message';
+}
+```
+
+## GitHub Actions Configuration
+
+### Creating .env from Secrets
+```yaml
+# In GitHub Actions workflow
+- name: Create .env file
+  run: |
+    cat > .env << EOF
+    JIRA_BASE_URL=${{ secrets.JIRA_BASE_URL }}
+    JIRA_EMAIL=${{ secrets.JIRA_EMAIL }}
+    JIRA_API_TOKEN=${{ secrets.JIRA_API_TOKEN }}
+    AI_PROVIDER=${{ secrets.AI_PROVIDER }}
+    AI_API_KEY=${{ secrets.AI_API_KEY }}
+    EOF
+```
+
+## Configuration Best Practices
+
+### ✅ DO
+
+```dart
+// Load config early and reuse
+final jiraConfig = JiraConfig.fromEnvironment();
+final jira = JiraClient(jiraConfig);
+
+// Validate config after loading
+ConfigValidator.validateJiraConfig(jiraConfig);
+
+// Use .env for local development
+// Use environment variables for CI/CD
+
+// Keep orbithub.env as documentation only
+```
+
+### ❌ DON'T
+
+```dart
+// ❌ Don't load config multiple times
+final config1 = JiraConfig.fromEnvironment();
+final config2 = JiraConfig.fromEnvironment(); // Wasteful
+
+// ❌ Don't hardcode credentials
+final config = JiraConfig(
+  baseUrl: 'https://mycompany.atlassian.net',
+  email: 'me@company.com',
+  apiToken: 'actual_token_hardcoded', // NEVER DO THIS!
+);
+
+// ❌ Don't load from orbithub.env
+dotenv.load(['orbithub.env']); // This is a template!
+
+// ❌ Don't skip validation
+final config = JiraConfig.fromEnvironment();
+// Forgot to validate - might fail later
+```
+
+## Configuration Debugging
+
+### Debug Helper
+```dart
+void printConfigDebugInfo() {
+  print('🔧 Configuration Debug Info:');
+  print('');
+  
+  // Check .env file
+  final envFile = File('.env');
+  print('.env file exists: ${envFile.existsSync()}');
+  
+  if (envFile.existsSync()) {
+    print('.env file size: ${envFile.lengthSync()} bytes');
+  }
+  
+  // Check environment variables (without exposing secrets)
+  final jiraUrl = Platform.environment['JIRA_BASE_URL'];
+  final jiraEmail = Platform.environment['JIRA_EMAIL'];
+  final jiraToken = Platform.environment['JIRA_API_TOKEN'];
+  final aiKey = Platform.environment['AI_API_KEY'];
+  
+  print('');
+  print('Environment Variables:');
+  print('JIRA_BASE_URL: ${jiraUrl != null && jiraUrl.isNotEmpty ? '✅ Set' : '❌ Not set'}');
+  print('JIRA_EMAIL: ${jiraEmail != null && jiraEmail.isNotEmpty ? '✅ Set' : '❌ Not set'}');
+  print('JIRA_API_TOKEN: ${jiraToken != null && jiraToken.isNotEmpty ? '✅ Set (${jiraToken.length} chars)' : '❌ Not set'}');
+  print('AI_API_KEY: ${aiKey != null && aiKey.isNotEmpty ? '✅ Set (${aiKey.length} chars)' : '❌ Not set'}');
+  print('');
+}
+```
+
+## Configuration Documentation
+
+Create a `CONFIG_INFO.md` file:
+
+```markdown
+# Configuration Guide
+
+## Setup Steps
+
+1. **Copy template:**
+   ```bash
+   cp orbithub.env .env
+   ```
+
+2. **Edit .env with your credentials:**
+   - JIRA_BASE_URL: Your Jira instance URL
+   - JIRA_EMAIL: Your Jira account email
+   - JIRA_API_TOKEN: Generate at https://id.atlassian.com/manage-profile/security/api-tokens
+   - AI_API_KEY: Your OpenAI/Claude API key
+
+3. **Verify configuration:**
+   ```bash
+   dart run bin/orbit.dart --config-check
+   ```
+
+## Priority Order
+
+1. `.env` file (highest priority)
+2. Environment variables
+3. Defaults (if any)
+
+## Important Notes
+
+- ⚠️ Never commit `.env` to version control
+- ⚠️ `orbithub.env` is only a template
+- ✅ Use GitHub Secrets for CI/CD
+```

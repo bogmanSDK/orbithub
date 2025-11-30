@@ -1,0 +1,368 @@
+---
+description: Comprehensive testing rules for OrbitHub
+globs: **/*_test.dart,**/test/**/*.dart
+---
+
+# Testing Rules for OrbitHub
+
+## Mandatory Testing Requirements
+
+### CRITICAL Testing Rules
+- **ALL business logic MUST be covered by comprehensive tests**
+- **NO production code without corresponding tests**
+- **Test coverage is NON-NEGOTIABLE**
+- If tests cannot be written, provide detailed explanation why
+
+## Testing Framework
+
+### Core Testing Libraries
+- **test**: Dart's official testing package
+- **mockito**: For mocking dependencies
+- **build_runner**: For generating mocks
+
+## Test Structure
+
+### Test File Naming
+- Test files: `class_name_test.dart`
+- Mirror source structure in `test/` directory
+- One test file per source file
+
+### Test Method Naming
+```dart
+test('methodName should do something when condition', () {
+  // Test implementation
+});
+
+test('getTicket should throw JiraNotFoundException when ticket does not exist', () {
+  // Test implementation
+});
+```
+
+### Test Structure (AAA Pattern)
+```dart
+import 'package:test/test.dart';
+import 'package:mockito/mockito.dart';
+import 'package:mockito/annotations.dart';
+
+@GenerateMocks([Dependency])
+void main() {
+  group('ClassName', () {
+    late ClassName sut; // System Under Test
+    late MockDependency mockDependency;
+    
+    setUp(() {
+      // Arrange - Create fresh instances for each test
+      mockDependency = MockDependency();
+      sut = ClassName(mockDependency);
+    });
+    
+    tearDown(() {
+      // Clean up resources if needed
+    });
+    
+    test('method should return expected result when input is valid', () {
+      // Arrange
+      when(mockDependency.someMethod()).thenReturn('expected');
+      
+      // Act
+      final result = sut.method('input');
+      
+      // Assert
+      expect(result, equals('expected'));
+      verify(mockDependency.someMethod()).called(1);
+    });
+  });
+}
+```
+
+## Mocking Guidelines
+
+### Generate Mocks
+```dart
+// In test file
+import 'package:mockito/annotations.dart';
+
+@GenerateMocks([JiraClient, AIProvider])
+void main() {
+  // Tests
+}
+```
+
+```bash
+# Generate mocks
+dart run build_runner build
+```
+
+### Mocking Async Methods
+```dart
+test('should handle async operations', () async {
+  // Arrange
+  when(mockClient.fetchData()).thenAnswer((_) async => 'data');
+  
+  // Act
+  final result = await sut.processData();
+  
+  // Assert
+  expect(result, isNotNull);
+});
+```
+
+### Mocking Exceptions
+```dart
+test('should throw exception when API fails', () {
+  // Arrange
+  when(mockClient.getTicket('KEY'))
+      .thenThrow(JiraException('Not found'));
+  
+  // Act & Assert
+  expect(
+    () => sut.processTicket('KEY'),
+    throwsA(isA<JiraException>()),
+  );
+});
+```
+
+## Testing Patterns
+
+### Testing HTTP Clients
+```dart
+test('should make correct API request', () async {
+  // Arrange
+  final mockDio = MockDio();
+  when(mockDio.get('/ticket/TEST-1'))
+      .thenAnswer((_) async => Response(
+            data: {'key': 'TEST-1', 'fields': {'summary': 'Test'}},
+            statusCode: 200,
+            requestOptions: RequestOptions(path: '/ticket/TEST-1'),
+          ));
+  
+  // Act
+  final result = await client.getTicket('TEST-1');
+  
+  // Assert
+  expect(result.key, equals('TEST-1'));
+});
+```
+
+### Testing File Operations
+```dart
+test('should read configuration from file', () {
+  // Arrange - Use temporary directory for tests
+  final tempDir = Directory.systemTemp.createTempSync();
+  final configFile = File('${tempDir.path}/.env');
+  configFile.writeAsStringSync('KEY=value');
+  
+  // Act
+  final config = Config.fromFile(configFile.path);
+  
+  // Assert
+  expect(config.key, equals('value'));
+  
+  // Cleanup
+  tempDir.deleteSync(recursive: true);
+});
+```
+
+### Testing Streams
+```dart
+test('should emit expected values', () async {
+  // Arrange
+  final stream = sut.watchChanges();
+  
+  // Act & Assert
+  expect(
+    stream,
+    emitsInOrder([
+      'value1',
+      'value2',
+      emitsDone,
+    ]),
+  );
+});
+```
+
+## Test Coverage
+
+### Coverage Requirements
+- **Target**: Minimum 80% line coverage
+- **Tool**: dart test --coverage
+- **Reporting**: lcov format
+
+### Generate Coverage Report
+```bash
+# Run tests with coverage
+dart test --coverage=coverage
+
+# Convert to lcov format
+dart pub global activate coverage
+dart pub global run coverage:format_coverage \
+  --lcov \
+  --in=coverage \
+  --out=coverage/lcov.info \
+  --report-on=lib
+
+# View HTML report (optional)
+genhtml coverage/lcov.info -o coverage/html
+open coverage/html/index.html
+```
+
+## Common Test Patterns
+
+### Test Data Builders
+```dart
+class TestTicketBuilder {
+  String _key = 'TEST-1';
+  String _summary = 'Test ticket';
+  
+  TestTicketBuilder withKey(String key) {
+    _key = key;
+    return this;
+  }
+  
+  TestTicketBuilder withSummary(String summary) {
+    _summary = summary;
+    return this;
+  }
+  
+  JiraTicket build() {
+    return JiraTicket(
+      key: _key,
+      fields: Fields(summary: _summary),
+    );
+  }
+}
+```
+
+### Parameterized Tests
+```dart
+void main() {
+  group('Input validation', () {
+    final testCases = [
+      ('valid-key', true),
+      ('INVALID', false),
+      ('', false),
+    ];
+    
+    for (final testCase in testCases) {
+      test('should validate "${testCase.$1}" as ${testCase.$2}', () {
+        expect(validator.isValid(testCase.$1), equals(testCase.$2));
+      });
+    }
+  });
+}
+```
+
+## Anti-Patterns to Avoid
+
+### Don't Test Implementation Details
+```dart
+// ❌ BAD - Testing private methods
+test('_privateMethod should...', () {
+  // Don't test private methods directly
+});
+
+// ✅ GOOD - Test public interface
+test('publicMethod should use internal logic correctly', () {
+  // Test through public API
+});
+```
+
+### Don't Share State Between Tests
+```dart
+// ❌ BAD - Shared mutable state
+late String sharedState;
+
+test('first test', () {
+  sharedState = 'modified';
+});
+
+test('second test', () {
+  // Depends on first test - BAD!
+  expect(sharedState, equals('modified'));
+});
+
+// ✅ GOOD - Independent tests
+test('first test', () {
+  final localState = 'value';
+  // Use localState
+});
+
+test('second test', () {
+  final localState = 'different';
+  // Each test is independent
+});
+```
+
+### Don't Use Real External Services
+```dart
+// ❌ BAD - Real API calls in tests
+test('should fetch from real API', () async {
+  final client = JiraClient(realConfig);
+  final ticket = await client.getTicket('REAL-123');
+  // Don't do this in unit tests!
+});
+
+// ✅ GOOD - Mock external dependencies
+test('should fetch ticket', () async {
+  when(mockClient.getTicket('TEST-123'))
+      .thenAnswer((_) async => testTicket);
+  // Test with mocks
+});
+```
+
+## Test Execution Commands
+
+```bash
+# Run all tests
+dart test
+
+# Run specific file
+dart test test/core/jira/jira_client_test.dart
+
+# Run tests matching name pattern
+dart test --name "JiraClient"
+
+# Run with verbose output
+dart test --reporter=expanded
+
+# Run tests and watch for changes
+dart test --watch
+```
+
+## Quick Testing Commands
+
+```bash
+# Test specific module
+dart test test/core/
+dart test test/ai/
+dart test test/workflows/
+
+# Test with compilation check
+dart analyze && dart test
+
+# Quick compile check
+dart compile kernel bin/orbit.dart
+dart compile kernel bin/ai_teammate.dart
+
+# Full validation before commit
+dart format lib/ bin/ test/ && \
+dart analyze && \
+dart test
+```
+
+## ANTI-ANALYSIS-PARALYSIS RULES
+
+🚫 **STOP** endless commenting about "what the test should do"
+✅ **START** by writing the test for the immediate functionality
+🚫 **STOP** writing multiple paragraphs about different approaches  
+✅ **START** implementing the first viable solution
+🚫 **STOP** second-guessing - if tests pass and coverage is good, commit it
+
+## Before Commit
+
+```bash
+# Format, analyze, and test
+dart format lib/ bin/ test/ && \
+dart analyze && \
+dart test
+```

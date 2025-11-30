@@ -1,0 +1,573 @@
+---
+description: AI Teammate workflow patterns for OrbitHub
+globs: **/ai_teammate.dart,**/workflows/*.dart,**/ai/*.dart
+---
+
+# AI Teammate Workflow Patterns
+
+## Workflow Overview
+
+The AI Teammate workflow follows these steps:
+1. Fetch ticket details from Jira
+2. Check for existing questions (subtasks)
+3. Generate questions if none exist
+4. Check if all questions are answered
+5. Generate Acceptance Criteria when complete
+6. Update ticket and change status
+
+## AI Provider Pattern
+
+### Abstract Interface
+```dart
+abstract class AIProvider {
+  /// Generate clarifying questions for a ticket
+  Future<List<String>> generateQuestions({
+    required String ticketTitle,
+    required String ticketDescription,
+    String? projectContext,
+  });
+  
+  /// Generate Acceptance Criteria based on ticket and answers
+  Future<String> generateAcceptanceCriteria({
+    required String ticketTitle,
+    required String ticketDescription,
+    required Map<String, String> questionsAndAnswers,
+    String? projectContext,
+  });
+  
+  /// Generate implementation plan (future feature)
+  Future<String> generateImplementationPlan({
+    required String ticketTitle,
+    required String ticketDescription,
+    required String acceptanceCriteria,
+  });
+}
+```
+
+### Implementation Pattern
+```dart
+class OpenAIProvider implements AIProvider {
+  final AIConfig config;
+  
+  OpenAIProvider(this.config);
+  
+  @override
+  Future<List<String>> generateQuestions({
+    required String ticketTitle,
+    required String ticketDescription,
+    String? projectContext,
+  }) async {
+    final prompt = _buildQuestionsPrompt(
+      ticketTitle: ticketTitle,
+      ticketDescription: ticketDescription,
+      projectContext: projectContext,
+    );
+    
+    try {
+      final chatCompletion = await OpenAI.instance.chat.create(
+        model: config.model ?? 'gpt-4',
+        messages: [
+          OpenAIChatCompletionChoiceMessageModel(
+            role: OpenAIChatMessageRole.system,
+            content: [
+              OpenAIChatCompletionChoiceMessageContentItemModel.text(
+                'You are a Business Analyst...',
+              ),
+            ],
+          ),
+          OpenAIChatCompletionChoiceMessageModel(
+            role: OpenAIChatMessageRole.user,
+            content: [
+              OpenAIChatCompletionChoiceMessageContentItemModel.text(prompt),
+            ],
+          ),
+        ],
+      );
+      
+      final response = chatCompletion.choices.first.message.content?.first.text ?? '';
+      return _parseQuestions(response);
+    } catch (e) {
+      throw AIException('Failed to generate questions: $e');
+    }
+  }
+  
+  String _buildQuestionsPrompt({
+    required String ticketTitle,
+    required String ticketDescription,
+    String? projectContext,
+  }) {
+    final buffer = StringBuffer();
+    buffer.writeln('Generate 3-5 clarifying questions for:');
+    buffer.writeln('Title: $ticketTitle');
+    buffer.writeln('Description: $ticketDescription');
+    
+    if (projectContext != null) {
+      buffer.writeln('Context: $projectContext');
+    }
+    
+    buffer.writeln('\nFormat each question as:');
+    buffer.writeln('Background: [context]');
+    buffer.writeln('Question: [question]');
+    buffer.writeln('Options:');
+    buffer.writeln('• Option A: [option]');
+    buffer.writeln('• Option B: [option]');
+    buffer.writeln('• Option C: [option]');
+    buffer.writeln('• Option D: Other (please specify)');
+    
+    return buffer.toString();
+  }
+  
+  List<String> _parseQuestions(String response) {
+    // Parse structured questions from AI response
+    final questionPattern = RegExp(
+      r'Background:\s*(.+?)\n\nQuestion:\s*(.+?)\n\nOptions:\s*(.+?)(?:\n\n|$)',
+      multiLine: true,
+      dotAll: true,
+    );
+    
+    final questions = <String>[];
+    for (final match in questionPattern.allMatches(response)) {
+      final background = match.group(1)?.trim() ?? '';
+      final question = match.group(2)?.trim() ?? '';
+      final optionsText = match.group(3)?.trim() ?? '';
+      
+      final structuredQuestion = StringBuffer();
+      structuredQuestion.writeln('Background: $background');
+      structuredQuestion.writeln('');
+      structuredQuestion.writeln('Question: $question');
+      structuredQuestion.writeln('');
+      structuredQuestion.writeln('Options:');
+      structuredQuestion.writeln(optionsText);
+      structuredQuestion.writeln('');
+      structuredQuestion.writeln('Decision:');
+      
+      questions.add(structuredQuestion.toString());
+    }
+    
+    return questions;
+  }
+}
+```
+
+## Structured Questions Format
+
+### Question Structure
+The structured question format ensures consistency and clarity:
+
+```
+Background: [Context about why this question matters]
+
+Question: [The actual question]
+
+Options:
+• Option A: [First option]
+• Option B: [Second option]
+• Option C: [Third option]
+• Option D: Other (please specify)
+
+Decision:
+```
+
+### Creating Subtasks with Structured Questions
+```dart
+Future<void> createQuestionSubtasks(
+  String parentKey,
+  List<String> questions,
+) async {
+  for (var i = 0; i < questions.length; i++) {
+    final structuredText = questions[i];
+    
+    // Extract question summary from structured text
+    final questionMatch = RegExp(r'Question:\s*(.+?)(?:\n|$)').firstMatch(structuredText);
+    final summary = questionMatch?.group(1)?.trim() ?? 'Question ${i + 1}';
+    
+    await jira.createSubtask(
+      parentKey: parentKey,
+      summary: summary,
+      description: structuredText, // Full structured format
+    );
+  }
+}
+```
+
+## Answer Checking Pattern
+
+### Check Answers in Description Field ONLY
+```dart
+class AnswerChecker {
+  final JiraClient jira;
+  
+  AnswerChecker(this.jira);
+  
+  /// Check if all subtasks have been answered
+  Future<TicketAnswerStatus> checkTicketAnswers(String ticketKey) async {
+    final subtasks = await jira.getSubtasks(ticketKey);
+    
+    if (subtasks.isEmpty) {
+      return TicketAnswerStatus(
+        ticketKey: ticketKey,
+        totalQuestions: 0,
+        answeredQuestions: 0,
+        subtaskAnswers: [],
+      );
+    }
+    
+    final subtaskAnswers = <SubtaskAnswer>[];
+    var answeredCount = 0;
+    
+    for (final subtask in subtasks) {
+      final answer = await _checkSubtaskAnswer(subtask);
+      subtaskAnswers.add(answer);
+      if (answer.isAnswered) answeredCount++;
+    }
+    
+    return TicketAnswerStatus(
+      ticketKey: ticketKey,
+      totalQuestions: subtasks.length,
+      answeredQuestions: answeredCount,
+      subtaskAnswers: subtaskAnswers,
+    );
+  }
+  
+  /// Check if a single subtask has been answered
+  /// Answers are provided in the Description field only (Decision: section)
+  Future<SubtaskAnswer> _checkSubtaskAnswer(JiraTicket subtask) async {
+    final description = subtask.fields.description ?? '';
+    final answers = <String>[];
+    String? answeredBy;
+    String? answeredAt;
+    
+    if (description.isNotEmpty) {
+      // Look for "Decision:" section in description
+      final decisionMatch = RegExp(
+        r'Decision:\s*(.+?)(?:\n\n|$)',
+        multiLine: true,
+        dotAll: true,
+      ).firstMatch(description);
+      
+      if (decisionMatch != null) {
+        final decisionText = decisionMatch.group(1)?.trim() ?? '';
+        // Check if decision is actually filled in
+        if (decisionText.isNotEmpty && 
+            decisionText.toLowerCase() != 'decision:' &&
+            !decisionText.contains('---END---')) {
+          answers.add(decisionText);
+          answeredBy = subtask.fields.assignee?.displayName ?? 
+                       subtask.fields.reporter?.displayName ?? 
+                       'User';
+          answeredAt = subtask.fields.updated ?? subtask.fields.created;
+        }
+      }
+    }
+    
+    final isAnswered = answers.isNotEmpty;
+    
+    return SubtaskAnswer(
+      subtaskKey: subtask.key,
+      summary: subtask.fields.summary ?? 'No summary',
+      isAnswered: isAnswered,
+      answers: answers,
+      answeredBy: answeredBy,
+      answeredAt: answeredAt,
+    );
+  }
+  
+  /// Collect answers for AI processing
+  Map<String, String> collectAnswersForAI(TicketAnswerStatus status) {
+    final questionsAndAnswers = <String, String>{};
+    
+    for (final subtask in status.subtaskAnswers) {
+      if (subtask.isAnswered && subtask.answers.isNotEmpty) {
+        questionsAndAnswers[subtask.summary] = subtask.answers.join('\n');
+      }
+    }
+    
+    return questionsAndAnswers;
+  }
+}
+```
+
+## Acceptance Criteria Generation
+
+### AC Generation Pattern
+```dart
+Future<String> generateAndUpdateAC({
+  required JiraTicket ticket,
+  required TicketAnswerStatus answerStatus,
+}) async {
+  // Collect Q&A
+  final questionsAndAnswers = answerChecker.collectAnswersForAI(answerStatus);
+  
+  // Generate AC
+  final ac = await ai.generateAcceptanceCriteria(
+    ticketTitle: ticket.fields.summary ?? 'No title',
+    ticketDescription: ticket.fields.description ?? '',
+    questionsAndAnswers: questionsAndAnswers,
+  );
+  
+  if (ac.isNotEmpty) {
+    // Append AC to description
+    final updatedDescription = '${ticket.fields.description ?? ''}\n\n$ac';
+    await jira.updateDescription(
+      ticket.key,
+      updatedDescription,
+      useMarkdown: true,
+    );
+    print('✅ Updated ticket with Acceptance Criteria');
+  }
+  
+  return ac;
+}
+```
+
+### AC Prompt Pattern
+```dart
+String _buildACPrompt({
+  required String ticketTitle,
+  required String ticketDescription,
+  required Map<String, String> questionsAndAnswers,
+  String? projectContext,
+}) {
+  final buffer = StringBuffer();
+  
+  buffer.writeln('Generate Acceptance Criteria for:');
+  buffer.writeln('**Title:** $ticketTitle');
+  buffer.writeln('');
+  buffer.writeln('**Description:**');
+  buffer.writeln(ticketDescription.isEmpty ? '(No description)' : ticketDescription);
+  
+  if (projectContext != null && projectContext.isNotEmpty) {
+    buffer.writeln('');
+    buffer.writeln('**Project Context:**');
+    buffer.writeln(projectContext);
+  }
+  
+  if (questionsAndAnswers.isNotEmpty) {
+    buffer.writeln('');
+    buffer.writeln('**Clarifying Questions and Answers:**');
+    questionsAndAnswers.forEach((question, answer) {
+      buffer.writeln('Q: $question');
+      buffer.writeln('A: $answer');
+      buffer.writeln('');
+    });
+  }
+  
+  buffer.writeln('');
+  buffer.writeln('TASK: Generate detailed, testable Acceptance Criteria in Gherkin format (Given-When-Then).');
+  buffer.writeln('Use Jira Markdown for formatting.');
+  buffer.writeln('');
+  buffer.writeln('Example Gherkin format:');
+  buffer.writeln('h3. Acceptance Criteria');
+  buffer.writeln('{code:gherkin}');
+  buffer.writeln('Given the user is on the login page');
+  buffer.writeln('When the user enters valid credentials');
+  buffer.writeln('Then the user should be redirected to the dashboard');
+  buffer.writeln('{code}');
+  
+  return buffer.toString();
+}
+```
+
+## Error Handling
+
+### Workflow Error Handling
+```dart
+Future<void> runWorkflow(String ticketKey) async {
+  try {
+    print('🤖 OrbitHub AI Teammate');
+    print('=' * 60);
+    print('📋 Processing ticket: $ticketKey');
+    
+    // Step 1: Fetch ticket
+    final ticket = await jira.getTicket(ticketKey);
+    
+    // Continue workflow...
+    
+  } on JiraNotFoundException catch (e) {
+    print('❌ ERROR: Ticket not found');
+    print('   Message: ${e.message}');
+    print('   💡 Check ticket key and Jira configuration');
+    exit(1);
+  } on JiraAuthException catch (e) {
+    print('❌ ERROR: Authentication failed');
+    print('   Message: ${e.message}');
+    print('   💡 Check JIRA_API_TOKEN in .env file');
+    exit(1);
+  } on AIException catch (e) {
+    print('❌ ERROR: AI error');
+    print('   Message: ${e.message}');
+    print('   💡 Check AI_API_KEY and provider configuration');
+    exit(1);
+  } catch (e, stackTrace) {
+    print('❌ ERROR: Unexpected error');
+    print('   Message: $e');
+    print('   Stack trace: $stackTrace');
+    exit(1);
+  }
+}
+```
+
+### Custom Exception Classes
+```dart
+class AIException implements Exception {
+  final String message;
+  final Exception? cause;
+  
+  AIException(this.message, [this.cause]);
+  
+  @override
+  String toString() => 'AIException: $message${cause != null ? ' (caused by: $cause)' : ''}';
+}
+
+class WorkflowException implements Exception {
+  final String message;
+  final String step;
+  
+  WorkflowException(this.message, this.step);
+  
+  @override
+  String toString() => 'WorkflowException at $step: $message';
+}
+```
+
+## Progress Reporting
+
+### Console Output Pattern
+```dart
+void printStep(int step, String description) {
+  print('\n📋 Step $step: $description...');
+}
+
+void printSuccess(String message) {
+  print('   ✅ $message');
+}
+
+void printWarning(String message) {
+  print('   ⚠️  $message');
+}
+
+void printError(String message) {
+  print('   ❌ $message');
+}
+
+void printInfo(String message) {
+  print('   💡 $message');
+}
+
+void printSummary({
+  required String ticketKey,
+  required int totalQuestions,
+  required int answeredQuestions,
+  required bool success,
+}) {
+  print('\n${'=' * 60}');
+  print('✨ AI TEAMMATE WORKFLOW COMPLETE');
+  print('=' * 60);
+  print('');
+  print('📊 Summary:');
+  print('   Ticket: $ticketKey');
+  print('   Questions: $totalQuestions');
+  print('   Answers: $answeredQuestions');
+  print('   Status: ${success ? '✅ All questions answered' : '⏳ Waiting for answers'}');
+  print('');
+  print('🔗 View ticket: https://your-jira.atlassian.net/browse/$ticketKey');
+}
+```
+
+## Workflow Configuration
+
+### Workflow Parameters
+```dart
+class WorkflowConfig {
+  final bool generateQuestions;
+  final bool checkAnswers;
+  final bool generateAC;
+  final bool updateStatus;
+  
+  const WorkflowConfig({
+    this.generateQuestions = true,
+    this.checkAnswers = true,
+    this.generateAC = true,
+    this.updateStatus = true,
+  });
+  
+  factory WorkflowConfig.fromEnvironment() {
+    return WorkflowConfig(
+      generateQuestions: _getBool('GENERATE_QUESTIONS', true),
+      checkAnswers: _getBool('CHECK_ANSWERS', true),
+      generateAC: _getBool('GENERATE_AC', true),
+      updateStatus: _getBool('UPDATE_STATUS', true),
+    );
+  }
+  
+  static bool _getBool(String key, bool defaultValue) {
+    final value = Platform.environment[key];
+    if (value == null) return defaultValue;
+    return value.toLowerCase() == 'true';
+  }
+}
+```
+
+## Workflow Steps
+
+### Complete Workflow Pattern
+```dart
+Future<void> runAITeammateWorkflow(String ticketKey) async {
+  // Step 1: Fetch ticket
+  printStep(1, 'Fetching ticket details');
+  final ticket = await jira.getTicket(ticketKey);
+  printSuccess('Title: ${ticket.fields.summary}');
+  
+  // Step 2: Check for existing questions
+  printStep(2, 'Checking for existing questions');
+  final subtasks = await jira.getSubtasks(ticketKey);
+  
+  if (subtasks.isEmpty) {
+    // Step 3: Generate questions
+    printStep(3, 'Generating questions');
+    final questions = await ai.generateQuestions(
+      ticketTitle: ticket.fields.summary ?? '',
+      ticketDescription: ticket.fields.description ?? '',
+    );
+    printSuccess('Generated ${questions.length} questions');
+    
+    // Step 4: Create subtasks
+    printStep(4, 'Creating question subtasks');
+    await createQuestionSubtasks(ticketKey, questions);
+    printSuccess('Created ${questions.length} subtasks');
+    
+    printInfo('Please answer the questions in Jira');
+    return;
+  }
+  
+  // Step 5: Check answers
+  printStep(5, 'Checking if questions are answered');
+  final answerStatus = await answerChecker.checkTicketAnswers(ticketKey);
+  print('   Progress: ${answerStatus.answeredQuestions}/${answerStatus.totalQuestions}');
+  
+  if (!answerStatus.allAnswered) {
+    printWarning('Not all questions answered yet');
+    return;
+  }
+  
+  // Step 6: Generate AC
+  printStep(6, 'Generating Acceptance Criteria');
+  final ac = await generateAndUpdateAC(
+    ticket: ticket,
+    answerStatus: answerStatus,
+  );
+  printSuccess('AC generated and added to ticket');
+  
+  // Step 7: Update status
+  printStep(7, 'Updating ticket status');
+  await jira.transitionTicket(ticketKey, 'In Progress');
+  printSuccess('Ticket moved to In Progress');
+  
+  printSummary(
+    ticketKey: ticketKey,
+    totalQuestions: answerStatus.totalQuestions,
+    answeredQuestions: answerStatus.answeredQuestions,
+    success: true,
+  );
+}
+```

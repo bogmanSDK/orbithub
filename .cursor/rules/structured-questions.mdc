@@ -1,0 +1,388 @@
+---
+description: Structured questions format for AI-generated clarifying questions
+globs: **/ai/*.dart,**/workflows/*.dart
+---
+
+# Structured Questions Format
+
+## Overview
+
+OrbitHub uses a structured format for AI-generated clarifying questions. This format ensures consistency and makes it easy for users to provide clear answers.
+
+## Question Format
+
+### Structure
+```
+Background: [Context explaining why this question matters]
+
+Question: [The actual question to be answered]
+
+Options:
+• Option A: [First possible answer]
+• Option B: [Second possible answer]
+• Option C: [Third possible answer]
+• Option D: Other (please specify)
+
+Decision:
+```
+
+### Example
+```
+Background: Depending on the application's structure, the button could be located in different places.
+
+Question: Where should the button be located on the page?
+
+Options:
+• Option A: At a fixed position on the page (please specify)
+• Option B: Within a specific component or section (please specify)
+• Option C: The location should be responsive based on screen size
+• Option D: Other (please specify)
+
+Decision:
+```
+
+## Generating Structured Questions
+
+### AI Prompt Pattern
+```dart
+String _buildQuestionsPrompt({
+  required String ticketTitle,
+  required String ticketDescription,
+  String? projectContext,
+}) {
+  final buffer = StringBuffer();
+  
+  buffer.writeln('You are a Business Analyst. Generate 3-5 clarifying questions for:');
+  buffer.writeln('');
+  buffer.writeln('**Title:** $ticketTitle');
+  buffer.writeln('**Description:** $ticketDescription');
+  
+  if (projectContext != null) {
+    buffer.writeln('**Project Context:** $projectContext');
+  }
+  
+  buffer.writeln('');
+  buffer.writeln('FORMAT REQUIREMENTS:');
+  buffer.writeln('Each question MUST follow this EXACT structure:');
+  buffer.writeln('');
+  buffer.writeln('Background: [One sentence explaining why this matters]');
+  buffer.writeln('');
+  buffer.writeln('Question: [Clear, specific question]');
+  buffer.writeln('');
+  buffer.writeln('Options:');
+  buffer.writeln('• Option A: [Specific option]');
+  buffer.writeln('• Option B: [Specific option]');
+  buffer.writeln('• Option C: [Specific option]');
+  buffer.writeln('• Option D: Other (please specify)');
+  buffer.writeln('');
+  buffer.writeln('Decision:');
+  buffer.writeln('');
+  buffer.writeln('---END---');
+  buffer.writeln('');
+  buffer.writeln('IMPORTANT:');
+  buffer.writeln('- Always provide 3-4 concrete options (A, B, C) plus "Other"');
+  buffer.writeln('- Include specific examples in options when possible');
+  buffer.writeln('- Leave "Decision:" empty for user to fill');
+  buffer.writeln('- Separate questions with "---END---"');
+  
+  return buffer.toString();
+}
+```
+
+### Parsing Structured Questions
+```dart
+List<String> _parseStructuredQuestions(String response) {
+  final questions = <String>[];
+  
+  // Split by ---END--- marker
+  final parts = response.split('---END---');
+  
+  for (final part in parts) {
+    final trimmed = part.trim();
+    if (trimmed.isEmpty) continue;
+    
+    // Validate structure
+    if (trimmed.contains('Background:') &&
+        trimmed.contains('Question:') &&
+        trimmed.contains('Options:') &&
+        trimmed.contains('Decision:')) {
+      questions.add(trimmed);
+    }
+  }
+  
+  // Fallback: Try regex parsing if split didn't work
+  if (questions.isEmpty) {
+    final questionPattern = RegExp(
+      r'Background:\s*(.+?)\n\nQuestion:\s*(.+?)\n\nOptions:\s*(.+?)\n\nDecision:',
+      multiLine: true,
+      dotAll: true,
+    );
+    
+    for (final match in questionPattern.allMatches(response)) {
+      final background = match.group(1)?.trim() ?? '';
+      final question = match.group(2)?.trim() ?? '';
+      final options = match.group(3)?.trim() ?? '';
+      
+      final structuredQuestion = StringBuffer();
+      structuredQuestion.writeln('Background: $background');
+      structuredQuestion.writeln('');
+      structuredQuestion.writeln('Question: $question');
+      structuredQuestion.writeln('');
+      structuredQuestion.writeln('Options:');
+      structuredQuestion.writeln(options);
+      structuredQuestion.writeln('');
+      structuredQuestion.writeln('Decision:');
+      
+      questions.add(structuredQuestion.toString());
+    }
+  }
+  
+  return questions;
+}
+```
+
+## Creating Subtasks
+
+### Extract Question Summary
+```dart
+String extractQuestionSummary(String structuredQuestion) {
+  // Extract just the question part for the subtask summary
+  final questionMatch = RegExp(
+    r'Question:\s*(.+?)(?:\n|$)',
+    multiLine: true,
+  ).firstMatch(structuredQuestion);
+  
+  return questionMatch?.group(1)?.trim() ?? 'Clarifying Question';
+}
+```
+
+### Create Subtask with Structured Question
+```dart
+Future<String> createQuestionSubtask(
+  String parentKey,
+  String structuredQuestion,
+) async {
+  final summary = extractQuestionSummary(structuredQuestion);
+  
+  return await jira.createSubtask(
+    parentKey: parentKey,
+    summary: summary,
+    description: structuredQuestion, // Full structured format
+  );
+}
+```
+
+## Answering Questions
+
+### How Users Answer
+
+Users answer by editing the subtask's Description field and filling in the "Decision:" line.
+
+**Before (unanswered):**
+```
+Background: The button styling affects user experience.
+
+Question: What color should the button be?
+
+Options:
+• Option A: Blue (primary brand color)
+• Option B: Green (success color)
+• Option C: Red (warning color)
+• Option D: Other (please specify)
+
+Decision:
+```
+
+**After (answered):**
+```
+Background: The button styling affects user experience.
+
+Question: What color should the button be?
+
+Options:
+• Option A: Blue (primary brand color)
+• Option B: Green (success color)
+• Option C: Red (warning color)
+• Option D: Other (please specify)
+
+Decision: Option A - Blue to match our brand guidelines
+```
+
+### Checking for Answers
+
+```dart
+bool isQuestionAnswered(String structuredQuestion) {
+  final decisionMatch = RegExp(
+    r'Decision:\s*(.+?)(?:\n\n|$)',
+    multiLine: true,
+    dotAll: true,
+  ).firstMatch(structuredQuestion);
+  
+  if (decisionMatch == null) return false;
+  
+  final decision = decisionMatch.group(1)?.trim() ?? '';
+  
+  // Check if decision is filled in (not empty, not just "Decision:")
+  return decision.isNotEmpty && 
+         decision.toLowerCase() != 'decision:' &&
+         !decision.contains('---END---');
+}
+```
+
+### Extracting Answer
+```dart
+String extractAnswer(String structuredQuestion) {
+  final decisionMatch = RegExp(
+    r'Decision:\s*(.+?)(?:\n\n|$)',
+    multiLine: true,
+    dotAll: true,
+  ).firstMatch(structuredQuestion);
+  
+  return decisionMatch?.group(1)?.trim() ?? '';
+}
+```
+
+## Validation
+
+### Validate Structured Question
+```dart
+bool validateStructuredQuestion(String question) {
+  final requiredSections = [
+    'Background:',
+    'Question:',
+    'Options:',
+    'Decision:',
+  ];
+  
+  for (final section in requiredSections) {
+    if (!question.contains(section)) {
+      print('⚠️  Missing required section: $section');
+      return false;
+    }
+  }
+  
+  // Check for at least 3 options
+  final optionPattern = RegExp(r'• Option [A-Z]:');
+  final optionMatches = optionPattern.allMatches(question);
+  
+  if (optionMatches.length < 3) {
+    print('⚠️  Need at least 3 options (found ${optionMatches.length})');
+    return false;
+  }
+  
+  return true;
+}
+```
+
+## Best Practices
+
+### ✅ DO
+
+```dart
+// Generate questions with specific, actionable options
+String goodQuestion = '''
+Background: The deployment strategy affects downtime and rollback capabilities.
+
+Question: How should we deploy this feature?
+
+Options:
+• Option A: Blue-green deployment for zero downtime
+• Option B: Rolling deployment with canary testing
+• Option C: Feature flag with gradual rollout
+• Option D: Other (please specify)
+
+Decision:
+''';
+
+// Include context in the background
+// Provide concrete options
+// Always include "Other" option
+// Leave Decision empty for user
+```
+
+### ❌ DON'T
+
+```dart
+// Vague options
+String badQuestion = '''
+Background: We need to decide.
+
+Question: What do you think?
+
+Options:
+• Option A: Yes
+• Option B: No
+
+Decision:
+''';
+
+// No context
+// Binary choice only
+// Not specific enough
+```
+
+## Integration with Workflows
+
+### Full Workflow Example
+```dart
+Future<void> generateAndCreateQuestions(String ticketKey) async {
+  // 1. Fetch ticket
+  final ticket = await jira.getTicket(ticketKey);
+  
+  // 2. Generate questions
+  final questions = await ai.generateQuestions(
+    ticketTitle: ticket.fields.summary ?? '',
+    ticketDescription: ticket.fields.description ?? '',
+  );
+  
+  print('Generated ${questions.length} questions');
+  
+  // 3. Validate questions
+  final validQuestions = questions.where(validateStructuredQuestion).toList();
+  print('Valid questions: ${validQuestions.length}');
+  
+  // 4. Create subtasks
+  for (var i = 0; i < validQuestions.length; i++) {
+    final question = validQuestions[i];
+    final summary = extractQuestionSummary(question);
+    
+    print('Creating subtask ${i + 1}: $summary');
+    
+    await jira.createSubtask(
+      parentKey: ticketKey,
+      summary: summary,
+      description: question,
+    );
+  }
+  
+  print('✅ Created ${validQuestions.length} question subtasks');
+}
+```
+
+## Troubleshooting
+
+### Common Issues
+
+**Issue: Questions not parsed correctly**
+```dart
+// Check if AI is using the exact format
+if (!response.contains('Background:') || !response.contains('Decision:')) {
+  print('⚠️  AI response doesn\'t match expected format');
+  print('Response preview: ${response.substring(0, min(200, response.length))}');
+}
+```
+
+**Issue: Multiple questions in one subtask**
+```dart
+// Make sure questions are split by ---END---
+final parts = response.split('---END---');
+print('Found ${parts.length} question parts');
+```
+
+**Issue: Answers not detected**
+```dart
+// Check Decision field format
+final decisionLine = description.split('\n')
+    .firstWhere((line) => line.startsWith('Decision:'), orElse: () => '');
+print('Decision line: "$decisionLine"');
+```
