@@ -151,14 +151,21 @@ _No clarification questions needed!_ 🚀
         final createdSubtasks = <String>[];
         
         for (var i = 0; i < questions.length; i++) {
-          final question = questions[i];
-          print('   Creating: $question');
+          final questionText = questions[i];
+          
+          // Extract question title from structured format
+          final questionMatch = RegExp(r'Question:\s*(.+?)(?:\n|$)', multiLine: true)
+              .firstMatch(questionText);
+          final summary = questionMatch?.group(1)?.trim() ?? 
+                          'Question ${i + 1}';
+          
+          print('   Creating: $summary');
           
           try {
             final subtask = await jira.createSubtask(
               parentKey: ticketKey,
-              summary: question,
-              description: 'Please provide details to help clarify the requirements.',
+              summary: summary,
+              description: questionText, // Full structured question as description
             );
             createdSubtasks.add(subtask.key);
             print('   ✅ Created: ${subtask.key}');

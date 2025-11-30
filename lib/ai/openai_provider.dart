@@ -153,7 +153,36 @@ class OpenAIProvider implements AIProvider {
     buffer.writeln('IF there are unclear points that need clarification:');
     buffer.writeln('  → Generate 1-$maxQuestions specific technical questions');
     buffer.writeln('  → Focus on critical missing information only');
-    buffer.writeln('  → Format: one question per line, starting with "❓"');
+    buffer.writeln('  → Each question MUST follow this EXACT format:');
+    buffer.writeln('');
+    buffer.writeln('---QUESTION---');
+    buffer.writeln('Background: [Brief context explaining why this question is important]');
+    buffer.writeln('');
+    buffer.writeln('Question: [Clear, specific question]');
+    buffer.writeln('');
+    buffer.writeln('Options:');
+    buffer.writeln('• Option A: [First possible approach/answer]');
+    buffer.writeln('• Option B: [Second possible approach/answer]');
+    buffer.writeln('• Option C: [Third possible approach/answer]');
+    buffer.writeln('• Option D: [Fourth possible approach/answer or "Other (please specify)"]');
+    buffer.writeln('');
+    buffer.writeln('Decision:');
+    buffer.writeln('---END---');
+    buffer.writeln('');
+    buffer.writeln('EXAMPLE of a well-formatted question:');
+    buffer.writeln('---QUESTION---');
+    buffer.writeln('Background: GitHub Pages can be deployed from root, /docs folder, or gh-pages branch. The current workflow structure uses GitHub Actions with proper permissions already configured.');
+    buffer.writeln('');
+    buffer.writeln('Question: What deployment configuration should be used for GitHub Pages?');
+    buffer.writeln('');
+    buffer.writeln('Options:');
+    buffer.writeln('• Option A: Deploy from gh-pages branch (clean separation, standard approach)');
+    buffer.writeln('• Option B: Deploy from /docs folder on main branch (simpler, no separate branch)');
+    buffer.writeln('• Option C: Deploy from root on main branch (not recommended for this project structure)');
+    buffer.writeln('• Option D: Other deployment approach');
+    buffer.writeln('');
+    buffer.writeln('Decision:');
+    buffer.writeln('---END---');
     buffer.writeln('');
     buffer.writeln('Questions should clarify:');
     buffer.writeln('- Ambiguous or missing technical requirements');
@@ -161,16 +190,12 @@ class OpenAIProvider implements AIProvider {
     buffer.writeln('- Important design decisions needed');
     buffer.writeln('- Testing or performance considerations');
     buffer.writeln('');
-    buffer.writeln('Examples of CLEAR tickets:');
+    buffer.writeln('Examples of CLEAR tickets (no questions needed):');
     buffer.writeln('- "Fix typo in login button: change Submitt to Submit"');
     buffer.writeln('- "Update package.json version from 1.0.0 to 1.0.1"');
     buffer.writeln('- "Remove unused import from UserService.java"');
     buffer.writeln('');
-    buffer.writeln('Examples needing questions:');
-    buffer.writeln('- "Add dark mode" → needs color values, default/opt-in, scope');
-    buffer.writeln('- "Implement search" → needs fields, syntax, performance');
-    buffer.writeln('');
-    buffer.writeln('Decision: CLEAR or questions?');
+    buffer.writeln('Decision: CLEAR or generate questions using the format above?');
     
     return buffer.toString();
   }
@@ -210,45 +235,55 @@ class OpenAIProvider implements AIProvider {
     // Check if AI says everything is clear
     if (trimmedResponse.toUpperCase() == 'CLEAR' || 
         trimmedResponse.toUpperCase().startsWith('CLEAR')) {
-      return []; // No questions needed
+      return [];
     }
     
+    // Parse structured questions between ---QUESTION--- and ---END---
+    final questions = <String>[];
+    final questionBlocks = RegExp(
+      r'---QUESTION---(.*?)---END---',
+      multiLine: true,
+      dotAll: true,
+    ).allMatches(response);
+    
+    for (final match in questionBlocks) {
+      final questionText = match.group(1)?.trim();
+      if (questionText != null && questionText.isNotEmpty) {
+        questions.add(questionText);
+      }
+    }
+    
+    // If structured format not found, fallback to old parsing
+    if (questions.isEmpty) {
+      print('⚠️  Warning: Structured format not detected, using fallback parsing');
+      return _parseQuestionsLegacy(response);
+    }
+    
+    return questions;
+  }
+  
+  List<String> _parseQuestionsLegacy(String response) {
     final lines = response.split('\n');
     final questions = <String>[];
     
     for (final line in lines) {
       final trimmed = line.trim();
-      if (trimmed.isEmpty) continue;
+      if (trimmed.isEmpty || trimmed.toUpperCase() == 'CLEAR') continue;
       
-      // Skip if it's the word CLEAR
-      if (trimmed.toUpperCase() == 'CLEAR') continue;
-      
-      // Remove leading symbols like ❓, -, *, 1., etc.
       String question = trimmed
           .replaceFirst(RegExp(r'^[❓\-\*\d]+[\.\):]?\s*'), '')
           .trim();
       
       if (question.isEmpty) continue;
       
-      // Check if it's a question (ends with ? or starts with question words)
       final lowerQuestion = question.toLowerCase();
       final isQuestion = question.endsWith('?') ||
           lowerQuestion.startsWith('what') ||
           lowerQuestion.startsWith('how') ||
           lowerQuestion.startsWith('should') ||
-          lowerQuestion.startsWith('which') ||
-          lowerQuestion.startsWith('when') ||
-          lowerQuestion.startsWith('where') ||
-          lowerQuestion.startsWith('who') ||
-          lowerQuestion.startsWith('why') ||
-          lowerQuestion.startsWith('can') ||
-          lowerQuestion.startsWith('do ') ||
-          lowerQuestion.startsWith('does') ||
-          lowerQuestion.startsWith('is ') ||
-          lowerQuestion.startsWith('are');
+          lowerQuestion.startsWith('which');
       
       if (isQuestion) {
-        // Add ❓ emoji if not present
         if (!question.startsWith('❓')) {
           question = '❓ $question';
         }
