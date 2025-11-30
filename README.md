@@ -20,8 +20,12 @@ OrbitHub is a complete Jira automation framework written in Dart. It provides a 
 - ✅ **Native Executables** - Compile to standalone binaries (no runtime!)
 - ✅ **AI Integration** - OpenAI/Claude for intelligent ticket analysis
 - ✅ **Structured Questions** - Background, Question, Options, Decision format
+- ✅ **Acceptance Criteria** - Gherkin-style AC generation from Q&A
 - ✅ **GitHub Actions** - Automated workflows with Jira integration
-- 🔄 **Code Generation** - (Coming soon) AI-powered implementation plans
+- ✅ **Confluence Templates** - Load AI prompts from Wiki pages
+- ✅ **Centralized Templates** - All prompts in `lib/core/templates/`
+- 🔄 **Solution Design** - (Coming soon) Architect role with module analysis
+- 🔄 **Implementation Plan** - (Coming soon) AI-powered dev plans
 
 ## 🎯 Why OrbitHub?
 
@@ -300,12 +304,16 @@ dart compile exe bin/orbit.dart -o orbit.exe    # Windows
 - [x] Complete ticket management
 - [x] Subtasks and comments
 - [x] Workflow transitions
-- [ ] AI integration (OpenAI/Claude)
-- [ ] GitHub integration
+- [x] AI integration (OpenAI/Claude)
+- [x] GitHub Actions integration
+- [x] Confluence integration for templates
+- [x] Structured questions (Template Q)
+- [x] Acceptance Criteria generation (Template AC)
+- [x] Centralized AI prompt templates
+- [ ] Solution Design (Architect role)
+- [ ] Implementation Plan generation
 - [ ] Flutter desktop UI
 - [ ] Flutter mobile app
-- [ ] Confluence integration
-- [ ] CI/CD integration (GitHub Actions)
 
 ## 🤝 Contributing
 
