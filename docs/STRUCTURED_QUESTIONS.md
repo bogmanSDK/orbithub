@@ -40,13 +40,21 @@ Decision:
 
 ## How to Answer
 
-### In Jira UI
+### In Jira UI (Recommended - like dmtools)
 
-1. Navigate to the subtask
-2. Add a comment with your decision:
+1. Navigate to the subtask (e.g., AIH-33)
+2. Click **Edit** (pencil icon)
+3. In the **Description** field, find the "Decision:" line
+4. Add your answer **after** "Decision:" on the same or next line:
 
+**Before:**
 ```
-Decision: Let's use Option A - gh-pages branch for clean separation
+Decision:
+```
+
+**After:**
+```
+Decision: Option A - Deploy from gh-pages branch for clean separation
 ```
 
 or
@@ -55,13 +63,23 @@ or
 Decision: Option B - /docs folder is simpler for our workflow
 ```
 
+5. Click **Update**
+6. The subtask status will automatically change to **Done** (optional)
+
 ### Custom Answer
 
 If you have a different approach (not listed in options):
 
 ```
-Decision: Option D - We'll use Netlify instead of GitHub Pages because it has better build caching
+Decision: Option D - We'll use Netlify instead of GitHub Pages because it has better build caching and preview deployments
 ```
+
+### Important Notes
+
+- ⚠️ **Do NOT answer in comments** - OrbitHub checks only the Description field
+- ✅ **Edit the Description directly** - Add your answer after "Decision:"
+- ✅ **Be specific** - Include details like colors, values, configurations
+- ✅ **Reference options** - Mention which option you chose (A, B, C, or D)
 
 ## Technical Details
 
