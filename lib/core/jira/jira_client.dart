@@ -30,7 +30,7 @@ class JiraClient {
           },
           connectTimeout: config.timeout,
           receiveTimeout: config.timeout,
-        )),
+        ),),
         _logger = Logger('JiraClient') {
     // Add logging interceptor if enabled
     if (config.enableLogging) {
@@ -38,7 +38,7 @@ class JiraClient {
         requestBody: true,
         responseBody: true,
         logPrint: (obj) => _logger.info(obj),
-      ));
+      ),);
     }
   }
 
@@ -266,7 +266,7 @@ class JiraClient {
   /// Mirrors: jira_assign_ticket_to
   Future<void> assignTicket(String key, String accountId) async {
     await updateTicket(key, {
-      'assignee': {'accountId': accountId}
+      'assignee': {'accountId': accountId},
     });
     _logger.info('✅ Assigned $key to $accountId');
   }
@@ -280,9 +280,9 @@ class JiraClient {
         data: {
           'update': {
             'labels': [
-              {'add': label}
-            ]
-          }
+              {'add': label},
+            ],
+          },
         },
       );
       _logger.info('✅ Added label "$label" to $key');
@@ -295,7 +295,7 @@ class JiraClient {
   /// Mirrors: jira_set_priority
   Future<void> setPriority(String key, String priorityName) async {
     await updateTicket(key, {
-      'priority': {'name': priorityName}
+      'priority': {'name': priorityName},
     });
     _logger.info('✅ Set priority to "$priorityName" for $key');
   }
@@ -386,7 +386,7 @@ class JiraClient {
     final comments = await getComments(key);
     
     final exists = comments.any((comment) => 
-      comment.body?.contains(body) ?? false
+      comment.body?.contains(body) ?? false,
     );
 
     if (!exists) {
@@ -425,7 +425,7 @@ class JiraClient {
       (t) => t.to?.name?.toLowerCase() == statusName.toLowerCase() ||
              t.name?.toLowerCase() == statusName.toLowerCase(),
       orElse: () => throw JiraNotFoundException(
-        'Transition to "$statusName" not found for $key'
+        'Transition to "$statusName" not found for $key',
       ),
     );
 
@@ -433,7 +433,7 @@ class JiraClient {
       await _dio.post(
         '/issue/$key/transitions',
         data: {
-          'transition': {'id': transition.id}
+          'transition': {'id': transition.id},
         },
       );
       _logger.info('✅ Moved $key to "$statusName"');
@@ -454,7 +454,7 @@ class JiraClient {
     final transition = transitions.firstWhere(
       (t) => t.to?.name?.toLowerCase() == statusName.toLowerCase(),
       orElse: () => throw JiraNotFoundException(
-        'Transition to "$statusName" not found for $key'
+        'Transition to "$statusName" not found for $key',
       ),
     );
 
@@ -464,8 +464,8 @@ class JiraClient {
         data: {
           'transition': {'id': transition.id},
           'fields': {
-            'resolution': {'name': resolutionName}
-          }
+            'resolution': {'name': resolutionName},
+          },
         },
       );
       _logger.info('✅ Moved $key to "$statusName" with resolution "$resolutionName"');
@@ -498,8 +498,8 @@ class JiraClient {
   Future<void> setFixVersion(String key, String versionName) async {
     await updateTicket(key, {
       'fixVersions': [
-        {'name': versionName}
-      ]
+        {'name': versionName},
+      ],
     });
     _logger.info('✅ Set fix version to "$versionName" for $key');
   }

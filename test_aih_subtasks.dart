@@ -1,4 +1,5 @@
 /// Test subtasks in AIH project
+library;
 import 'lib/core/jira/jira_config.dart';
 import 'lib/core/jira/jira_client.dart';
 
@@ -47,13 +48,13 @@ Subtasks will be created for each question.
     );
     
     print('✅ Created Story: ${story.key}');
-    print('   URL: ${jira.getTicketBrowseUrl(story.key!)}');
+    print('   URL: ${jira.getTicketBrowseUrl(story.key)}');
     print('   Status: ${story.fields.status?.name}');
     
     // Create Subtask 1
     print('\n📎 Step 3: Creating Subtask 1...');
     final subtask1 = await jira.createSubtask(
-      parentKey: story.key!,
+      parentKey: story.key,
       summary: '❓ Question 1: What exact color values should be used?',
       description: '''
 Please specify the color palette:
@@ -81,7 +82,7 @@ Please specify the color palette:
     // Create Subtask 2
     print('\n📎 Step 4: Creating Subtask 2...');
     final subtask2 = await jira.createSubtask(
-      parentKey: story.key!,
+      parentKey: story.key,
       summary: '❓ Question 2: Should dark theme be default or opt-in?',
       description: '''
 Please clarify the default behavior:
@@ -99,7 +100,7 @@ Please clarify the default behavior:
     // Create Subtask 3
     print('\n📎 Step 5: Creating Subtask 3...');
     final subtask3 = await jira.createSubtask(
-      parentKey: story.key!,
+      parentKey: story.key,
       summary: '❓ Question 3: Are there any accessibility requirements?',
       description: '''
 Please specify accessibility requirements:
@@ -117,7 +118,7 @@ Please specify accessibility requirements:
     
     // Verify subtasks
     print('\n📋 Step 6: Fetching all subtasks...');
-    final subtasks = await jira.getSubtasks(story.key!);
+    final subtasks = await jira.getSubtasks(story.key);
     print('✅ Retrieved ${subtasks.length} subtasks:');
     for (final sub in subtasks) {
       print('   - ${sub.key}: ${sub.fields.summary}');
@@ -126,14 +127,14 @@ Please specify accessibility requirements:
     
     // Add label
     print('\n🏷️  Step 7: Adding labels...');
-    await jira.addLabel(story.key!, 'ai-questions');
-    await jira.addLabel(story.key!, 'needs-clarification');
+    await jira.addLabel(story.key, 'ai-questions');
+    await jira.addLabel(story.key, 'needs-clarification');
     print('✅ Added labels');
     
     // Post comment
     print('\n💬 Step 8: Posting comment to parent...');
     await jira.postComment(
-      story.key!,
+      story.key,
       '''
 🤖 **AI Teammate has analyzed this story.**
 
@@ -154,22 +155,22 @@ Status: ⏳ **Waiting for answers**
     // Post comments to subtasks
     print('\n💬 Step 9: Posting comments to subtasks...');
     await jira.postComment(
-      subtask1.key!,
+      subtask1.key,
       '⏰ This question requires product owner input. Please provide color specifications.',
     );
     await jira.postComment(
-      subtask2.key!,
+      subtask2.key,
       '⏰ This question requires UX decision. Please clarify default behavior.',
     );
     await jira.postComment(
-      subtask3.key!,
+      subtask3.key,
       '⏰ This question requires accessibility team input.',
     );
     print('✅ Posted comments to all subtasks');
     
     // Get transitions
     print('\n🔄 Step 10: Checking available transitions...');
-    final transitions = await jira.getTransitions(story.key!);
+    final transitions = await jira.getTransitions(story.key);
     print('✅ Found ${transitions.length} transitions:');
     for (final t in transitions) {
       print('   - ${t.name} → ${t.to?.name}');
@@ -188,14 +189,14 @@ Status: ⏳ **Waiting for answers**
     if (inProgressTransition != null) {
       print('\n🔄 Step 11: Moving story to review status...');
       final targetStatus = inProgressTransition.to?.name ?? inProgressTransition.name;
-      await jira.moveToStatus(story.key!, targetStatus!);
+      await jira.moveToStatus(story.key, targetStatus!);
       
-      final updated = await jira.getTicket(story.key!);
+      final updated = await jira.getTicket(story.key);
       print('✅ Moved to: ${updated.fields.status?.name}');
     }
     
     // Final summary
-    print('\n' + '=' * 60);
+    print('\n${'=' * 60}');
     print('✨ SUBTASK TEST COMPLETE - SUCCESS!');
     print('=' * 60);
     
@@ -204,10 +205,10 @@ Status: ⏳ **Waiting for answers**
     print('   3 Subtasks: ${subtask1.key}, ${subtask2.key}, ${subtask3.key}');
     
     print('\n🔗 Links:');
-    print('   Story: ${jira.getTicketBrowseUrl(story.key!)}');
-    print('   Subtask 1: ${jira.getTicketBrowseUrl(subtask1.key!)}');
-    print('   Subtask 2: ${jira.getTicketBrowseUrl(subtask2.key!)}');
-    print('   Subtask 3: ${jira.getTicketBrowseUrl(subtask3.key!)}');
+    print('   Story: ${jira.getTicketBrowseUrl(story.key)}');
+    print('   Subtask 1: ${jira.getTicketBrowseUrl(subtask1.key)}');
+    print('   Subtask 2: ${jira.getTicketBrowseUrl(subtask2.key)}');
+    print('   Subtask 3: ${jira.getTicketBrowseUrl(subtask3.key)}');
     
     print('\n✅ Verified features:');
     print('   ✅ Create Story with markdown description');

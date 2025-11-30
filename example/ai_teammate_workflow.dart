@@ -10,7 +10,7 @@ import 'package:orbithub/orbithub.dart';
 void main() async {
   Logger.root.level = Level.INFO;
   Logger.root.onRecord.listen((record) {
-    print('${record.message}');
+    print(record.message);
   });
 
   try {

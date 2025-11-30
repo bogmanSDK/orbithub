@@ -1,5 +1,6 @@
 /// Final integration test for OrbitHub
 /// Tests all implemented functionality
+library;
 import 'lib/core/jira/jira_config.dart';
 import 'lib/core/jira/jira_client.dart';
 import 'lib/core/jira/adf_helper.dart';
@@ -31,7 +32,7 @@ void main() async {
       description: 'This is a test ticket.\nIt has multiple lines.\n\nAnd paragraphs.',
     );
     print('   Created: ${ticket.key}');
-    print('   URL: ${jira.getTicketBrowseUrl(ticket.key!)}');
+    print('   URL: ${jira.getTicketBrowseUrl(ticket.key)}');
     passedTests++;
     
     // Test 3: Create ticket with markdown
@@ -55,7 +56,7 @@ void main() async {
       useMarkdown: true,
     );
     print('   Created: ${markdownTicket.key}');
-    print('   URL: ${jira.getTicketBrowseUrl(markdownTicket.key!)}');
+    print('   URL: ${jira.getTicketBrowseUrl(markdownTicket.key)}');
     passedTests++;
     
     // Test 4: Search tickets
@@ -74,28 +75,28 @@ void main() async {
     // Test 5: Add label
     totalTests++;
     print('\n✅ Test 5: Add label');
-    await jira.addLabel(ticket.key!, 'orbithub-test');
+    await jira.addLabel(ticket.key, 'orbithub-test');
     print('   Added label "orbithub-test" to ${ticket.key}');
     passedTests++;
     
     // Test 6: Post comment
     totalTests++;
     print('\n✅ Test 6: Post comment');
-    await jira.postComment(ticket.key!, 'Automated test comment from OrbitHub 🤖');
+    await jira.postComment(ticket.key, 'Automated test comment from OrbitHub 🤖');
     print('   Posted comment to ${ticket.key}');
     passedTests++;
     
     // Test 7: Get comments
     totalTests++;
     print('\n✅ Test 7: Get comments');
-    final comments = await jira.getComments(ticket.key!);
+    final comments = await jira.getComments(ticket.key);
     print('   Retrieved ${comments.length} comment(s)');
     passedTests++;
     
     // Test 8: Get transitions
     totalTests++;
     print('\n✅ Test 8: Get available transitions');
-    final transitions = await jira.getTransitions(ticket.key!);
+    final transitions = await jira.getTransitions(ticket.key);
     print('   Found ${transitions.length} available transitions:');
     for (final t in transitions) {
       print('     - ${t.name} → ${t.to?.name}');
@@ -111,10 +112,10 @@ void main() async {
       final targetStatus = targetTransition.to?.name ?? targetTransition.name;
       
       print('   Moving ${ticket.key} to "$targetStatus"...');
-      await jira.moveToStatus(ticket.key!, targetStatus!);
+      await jira.moveToStatus(ticket.key, targetStatus!);
       
       // Verify
-      final updated = await jira.getTicket(ticket.key!);
+      final updated = await jira.getTicket(ticket.key);
       print('   Current status: ${updated.fields.status?.name}');
       passedTests++;
     } else {
@@ -125,7 +126,7 @@ void main() async {
     totalTests++;
     print('\n✅ Test 10: Update ticket description');
     await jira.updateDescription(
-      ticket.key!,
+      ticket.key,
       'Updated description via OrbitHub API.\n\nTimestamp: ${DateTime.now()}',
     );
     print('   Updated description for ${ticket.key}');
@@ -146,7 +147,7 @@ void main() async {
     print('\n⚠️  Test 12: Subtasks');
     try {
       final subtask = await jira.createSubtask(
-        parentKey: ticket.key!,
+        parentKey: ticket.key,
         summary: 'Test subtask',
         description: 'Subtask description',
       );
@@ -160,7 +161,7 @@ void main() async {
     }
     
     // Final summary
-    print('\n' + '=' * 60);
+    print('\n${'=' * 60}');
     print('✨ TEST RESULTS');
     print('=' * 60);
     print('✅ Passed: $passedTests/$totalTests');
@@ -173,8 +174,8 @@ void main() async {
     }
     
     print('\n📋 Test tickets created:');
-    print('   ${jira.getTicketBrowseUrl(ticket.key!)}');
-    print('   ${jira.getTicketBrowseUrl(markdownTicket.key!)}');
+    print('   ${jira.getTicketBrowseUrl(ticket.key)}');
+    print('   ${jira.getTicketBrowseUrl(markdownTicket.key)}');
     
     print('\n💡 Summary of implemented features:');
     print('   ✅ Jira authentication');

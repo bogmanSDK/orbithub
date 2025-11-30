@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'package:dotenv/dotenv.dart';
 
 /// Jira API configuration
 class JiraConfig {

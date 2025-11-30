@@ -1,4 +1,5 @@
 /// Test subtasks in new project with proper issue types
+library;
 import 'lib/core/jira/jira_config.dart';
 import 'lib/core/jira/jira_client.dart';
 
@@ -102,12 +103,12 @@ This is a test story to verify subtask functionality.
     );
     
     print('✅ Created: ${parent.key}');
-    print('   URL: ${jira.getTicketBrowseUrl(parent.key!)}');
+    print('   URL: ${jira.getTicketBrowseUrl(parent.key)}');
     
     // Create subtask 1
     print('\n📎 Step 4: Creating subtask 1...');
     final subtask1 = await jira.createSubtask(
-      parentKey: parent.key!,
+      parentKey: parent.key,
       summary: '❓ Question 1: What is the expected behavior for Feature A?',
       description: '''
 Please clarify the expected behavior:
@@ -125,7 +126,7 @@ Please clarify the expected behavior:
     // Create subtask 2
     print('\n📎 Step 5: Creating subtask 2...');
     final subtask2 = await jira.createSubtask(
-      parentKey: parent.key!,
+      parentKey: parent.key,
       summary: '❓ Question 2: What are the edge cases for Feature B?',
       description: '''
 ## Edge cases to consider:
@@ -146,7 +147,7 @@ Please provide examples for each case.
     // Create subtask 3
     print('\n📎 Step 6: Creating subtask 3...');
     final subtask3 = await jira.createSubtask(
-      parentKey: parent.key!,
+      parentKey: parent.key,
       summary: '❓ Question 3: How should Feature C be validated?',
       description: 'Please describe the validation criteria and acceptance tests.',
     );
@@ -156,7 +157,7 @@ Please provide examples for each case.
     
     // Fetch all subtasks
     print('\n📋 Step 7: Fetching all subtasks...');
-    final allSubtasks = await jira.getSubtasks(parent.key!);
+    final allSubtasks = await jira.getSubtasks(parent.key);
     print('✅ Found ${allSubtasks.length} subtasks:');
     for (final sub in allSubtasks) {
       print('   - ${sub.key}: ${sub.fields.summary}');
@@ -164,20 +165,20 @@ Please provide examples for each case.
     
     // Add label to parent
     print('\n🏷️  Step 8: Adding label to parent...');
-    await jira.addLabel(parent.key!, 'ai-questions');
+    await jira.addLabel(parent.key, 'ai-questions');
     print('✅ Added label "ai-questions"');
     
     // Add comments to subtasks
     print('\n💬 Step 9: Adding comments to subtasks...');
     await jira.postComment(
-      subtask1.key!,
+      subtask1.key,
       'This question requires developer input. Please answer within 24h. 🤖',
     );
     print('✅ Added comment to ${subtask1.key}');
     
     // Get transitions for parent
     print('\n🔄 Step 10: Checking available transitions...');
-    final transitions = await jira.getTransitions(parent.key!);
+    final transitions = await jira.getTransitions(parent.key);
     print('✅ Found ${transitions.length} transitions:');
     for (final t in transitions) {
       print('   - ${t.name} → ${t.to?.name}');
@@ -194,13 +195,13 @@ Please provide examples for each case.
       if (inProgressTransition != null) {
         print('\n🔄 Step 11: Moving parent to In Progress...');
         final targetStatus = inProgressTransition.to?.name ?? inProgressTransition.name;
-        await jira.moveToStatus(parent.key!, targetStatus!);
+        await jira.moveToStatus(parent.key, targetStatus!);
         print('✅ Moved to "$targetStatus"');
       }
     }
     
     // Final summary
-    print('\n' + '=' * 60);
+    print('\n${'=' * 60}');
     print('✨ TEST COMPLETE - ALL FEATURES WORKING!');
     print('=' * 60);
     
@@ -209,10 +210,10 @@ Please provide examples for each case.
     print('   3 Subtasks: ${subtask1.key}, ${subtask2.key}, ${subtask3.key}');
     
     print('\n🔗 Links:');
-    print('   Parent: ${jira.getTicketBrowseUrl(parent.key!)}');
-    print('   Subtask 1: ${jira.getTicketBrowseUrl(subtask1.key!)}');
-    print('   Subtask 2: ${jira.getTicketBrowseUrl(subtask2.key!)}');
-    print('   Subtask 3: ${jira.getTicketBrowseUrl(subtask3.key!)}');
+    print('   Parent: ${jira.getTicketBrowseUrl(parent.key)}');
+    print('   Subtask 1: ${jira.getTicketBrowseUrl(subtask1.key)}');
+    print('   Subtask 2: ${jira.getTicketBrowseUrl(subtask2.key)}');
+    print('   Subtask 3: ${jira.getTicketBrowseUrl(subtask3.key)}');
     
     print('\n✅ Verified features:');
     print('   ✅ Create parent ticket with markdown');

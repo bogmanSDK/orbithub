@@ -79,7 +79,7 @@ class JiraFields {
       'summary', 'description', 'status', 'priority', 'issuetype',
       'assignee', 'reporter', 'creator', 'project', 'fixVersions',
       'components', 'attachment', 'labels', 'created', 'updated',
-      'duedate', 'parent', 'customfield_10004'
+      'duedate', 'parent', 'customfield_10004',
     };
     
     final customFields = Map<String, dynamic>.from(json)

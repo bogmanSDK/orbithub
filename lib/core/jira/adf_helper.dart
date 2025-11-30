@@ -3,6 +3,7 @@
 /// 
 /// ADF is a JSON-based format for rich text fields in Jira.
 /// Reference: https://developer.atlassian.com/cloud/jira/platform/apis/document/structure/
+library;
 
 /// Converts plain text to ADF format
 Map<String, dynamic> textToAdf(String text) {
@@ -154,7 +155,7 @@ Map<String, dynamic> _bulletListNode(List<String> items) {
     'content': items.map((item) => {
       'type': 'listItem',
       'content': [_paragraphNode([_textNode(item)])],
-    }).toList(),
+    },).toList(),
   };
 }
 
@@ -165,7 +166,7 @@ Map<String, dynamic> _orderedListNode(List<String> items) {
     'content': items.map((item) => {
       'type': 'listItem',
       'content': [_paragraphNode([_textNode(item)])],
-    }).toList(),
+    },).toList(),
   };
 }
 
@@ -233,19 +234,19 @@ List<Map<String, dynamic>> _parseInlineFormatting(String text) {
         nodes.add(_textNode(
           nextMatch.group(1)!,
           marks: [{'type': 'strong'}],
-        ));
+        ),);
         break;
       case 'italic':
         nodes.add(_textNode(
           nextMatch.group(1)!,
           marks: [{'type': 'em'}],
-        ));
+        ),);
         break;
       case 'code':
         nodes.add(_textNode(
           nextMatch.group(1)!,
           marks: [{'type': 'code'}],
-        ));
+        ),);
         break;
       case 'link':
         nodes.add({

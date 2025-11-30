@@ -2,6 +2,7 @@ import 'package:dart_openai/dart_openai.dart';
 import 'ai_provider.dart';
 import '../core/confluence/confluence_client.dart';
 import '../core/confluence/template_config.dart';
+import '../core/templates/prompt_templates.dart';
 
 /// OpenAI implementation of AI provider
 /// 
@@ -151,66 +152,18 @@ class OpenAIProvider implements AIProvider {
   }
 
   /// Get hardcoded template (fallback)
+  /// Templates are centralized in lib/core/templates/prompt_templates.dart
   String _getHardcodedTemplate(String templateType) {
     switch (templateType) {
       case 'questions':
-        return _getHardcodedQuestionsTemplate();
+        return PromptTemplates.getTemplate(TemplateType.questions);
       case 'acceptance_criteria':
-        return _getHardcodedACTemplate();
+        return PromptTemplates.getTemplate(TemplateType.acceptanceCriteria);
+      case 'solution_design':
+        return PromptTemplates.getTemplate(TemplateType.solutionDesign);
       default:
         return '';
     }
-  }
-
-  String _getHardcodedQuestionsTemplate() {
-    return '''
-FORMAT REQUIREMENTS:
-Each question MUST follow this EXACT structure:
-
----QUESTION---
-Background: [Brief context explaining why this question is important]
-
-Question: [Clear, specific question]
-
-Options:
-• Option A: [First possible approach/answer]
-• Option B: [Second possible approach/answer]
-• Option C: [Third possible approach/answer]
-• Option D: Other (please specify)
-
-Decision:
----END---
-
-EXAMPLE of a well-formatted question:
----QUESTION---
-Background: GitHub Pages can be deployed from root, /docs folder, or gh-pages branch.
-
-Question: What deployment configuration should be used for GitHub Pages?
-
-Options:
-• Option A: Deploy from gh-pages branch (clean separation, standard approach)
-• Option B: Deploy from /docs folder on main branch (simpler, no separate branch)
-• Option C: Deploy from root on main branch (not recommended for this project structure)
-• Option D: Other (please specify)
-
-Decision:
----END---
-''';
-  }
-
-  String _getHardcodedACTemplate() {
-    return '''
-FORMAT: Use Gherkin format (Given-When-Then) with Jira Markdown
-
-Example:
-h3. Acceptance Criteria
-{code:gherkin}
-Given the user is on the login page
-When the user enters valid credentials
-Then the user should be redirected to the dashboard
-And a success message should be displayed
-{code}
-''';
   }
 
   Future<String> _buildQuestionsPrompt({

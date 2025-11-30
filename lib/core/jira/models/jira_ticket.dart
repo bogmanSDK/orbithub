@@ -84,7 +84,7 @@ class JiraTicket {
 
   @override
   String toString() {
-    return 'JiraTicket(key: $key, summary: ${fields.summary}, status: ${statusName})';
+    return 'JiraTicket(key: $key, summary: ${fields.summary}, status: $statusName)';
   }
 
   @override

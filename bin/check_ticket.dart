@@ -1,6 +1,6 @@
 import 'dart:io';
-import '../lib/core/jira/jira_config.dart';
-import '../lib/core/jira/jira_client.dart';
+import 'package:orbithub/core/jira/jira_config.dart';
+import 'package:orbithub/core/jira/jira_client.dart';
 
 void main(List<String> args) async {
   if (args.isEmpty) {

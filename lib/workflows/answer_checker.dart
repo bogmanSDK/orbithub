@@ -1,5 +1,6 @@
 /// Workflow monitor for checking if subtasks have been answered
 /// Used by AI Teammate to determine if questions have been answered
+library;
 import '../core/jira/jira_client.dart';
 import '../core/jira/models/jira_ticket.dart';
 

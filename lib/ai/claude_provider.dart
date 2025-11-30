@@ -1,5 +1,8 @@
 import 'package:dio/dio.dart';
 import 'ai_provider.dart';
+import '../core/confluence/confluence_client.dart';
+import '../core/confluence/template_config.dart';
+import '../core/templates/prompt_templates.dart';
 
 /// Anthropic API version
 const anthropicApiVersion = '2023-06-01';
@@ -8,9 +11,16 @@ const anthropicApiVersion = '2023-06-01';
 class ClaudeProvider implements AIProvider {
   final AIConfig config;
   final Dio _dio;
+  final ConfluenceClient? _confluenceClient;
+  final TemplateConfig _templateConfig;
   
-  ClaudeProvider(this.config)
-      : _dio = Dio(BaseOptions(
+  ClaudeProvider(
+    this.config, {
+    ConfluenceClient? confluenceClient,
+    TemplateConfig? templateConfig,
+  })  : _confluenceClient = confluenceClient,
+        _templateConfig = templateConfig ?? TemplateConfig.hardcoded(),
+        _dio = Dio(BaseOptions(
           baseUrl: 'https://api.anthropic.com/v1',
           headers: {
             'x-api-key': config.apiKey,
@@ -19,7 +29,7 @@ class ClaudeProvider implements AIProvider {
           },
           connectTimeout: const Duration(seconds: 30),
           receiveTimeout: const Duration(seconds: 60),
-        ));
+        ),);
   
   @override
   Future<List<String>> generateQuestions({
@@ -28,7 +38,7 @@ class ClaudeProvider implements AIProvider {
     String? projectContext,
     int maxQuestions = 5,
   }) async {
-    final prompt = _buildQuestionsPrompt(
+    final prompt = await _buildQuestionsPrompt(
       ticketTitle: ticketTitle,
       ticketDescription: ticketDescription,
       projectContext: projectContext,
@@ -48,7 +58,7 @@ class ClaudeProvider implements AIProvider {
         ],
         'system': 'You are a senior software engineer reviewing Jira tickets. '
             'Your job is to ask clarifying questions to ensure the requirements are clear.',
-      });
+      },);
       
       final content = response.data['content'] as List;
       final text = content.first['text'] as String;
@@ -99,7 +109,7 @@ class ClaudeProvider implements AIProvider {
         ],
         'system': 'You are a senior software engineer creating implementation plans. '
             'Generate a clear, actionable plan based on the requirements and answers.',
-      });
+      },);
       
       final content = response.data['content'] as List;
       return content.first['text'] as String;
@@ -118,12 +128,46 @@ class ClaudeProvider implements AIProvider {
     }
   }
   
-  String _buildQuestionsPrompt({
+  /// Load template from Confluence or use hardcoded
+  Future<String> _loadTemplate(String templateType) async {
+    if (_templateConfig.usesConfluence && _confluenceClient != null) {
+      final url = _templateConfig.getTemplateUrl(templateType);
+      if (url != null) {
+        try {
+          print('   📚 Loading $templateType template from Confluence...');
+          final content = await _confluenceClient!.getPlainTextContent(url);
+          print('   ✅ Template loaded (${content.length} chars)');
+          return content;
+        } catch (e) {
+          print('   ⚠️  Failed to load Confluence template: $e');
+          print('   💡 Falling back to hardcoded template');
+        }
+      }
+    }
+    return _getHardcodedTemplate(templateType);
+  }
+
+  /// Get hardcoded template (fallback)
+  /// Templates centralized in lib/core/templates/prompt_templates.dart
+  String _getHardcodedTemplate(String templateType) {
+    switch (templateType) {
+      case 'questions':
+        return PromptTemplates.getTemplate(TemplateType.questions);
+      case 'acceptance_criteria':
+        return PromptTemplates.getTemplate(TemplateType.acceptanceCriteria);
+      case 'solution_design':
+        return PromptTemplates.getTemplate(TemplateType.solutionDesign);
+      default:
+        return '';
+    }
+  }
+
+  Future<String> _buildQuestionsPrompt({
     required String ticketTitle,
     required String ticketDescription,
     String? projectContext,
     required int maxQuestions,
-  }) {
+  }) async {
     final buffer = StringBuffer();
     
     buffer.writeln('You are a senior software engineer reviewing a Jira ticket.');
@@ -149,47 +193,17 @@ class ClaudeProvider implements AIProvider {
     buffer.writeln('IF there are unclear points that need clarification:');
     buffer.writeln('  → Generate 1-$maxQuestions specific technical questions');
     buffer.writeln('  → Focus on critical missing information only');
-    buffer.writeln('  → Each question MUST follow this EXACT format:');
     buffer.writeln('');
-    buffer.writeln('---QUESTION---');
-    buffer.writeln('Background: [Brief context explaining why this question is important]');
+    
+    // Load template (from Confluence or hardcoded)
+    final template = await _loadTemplate('questions');
+    buffer.write(template);
     buffer.writeln('');
-    buffer.writeln('Question: [Clear, specific question]');
-    buffer.writeln('');
-    buffer.writeln('Options:');
-    buffer.writeln('• Option A: [First possible approach/answer]');
-    buffer.writeln('• Option B: [Second possible approach/answer]');
-    buffer.writeln('• Option C: [Third possible approach/answer]');
-    buffer.writeln('• Option D: [Fourth possible approach/answer or "Other (please specify)"]');
-    buffer.writeln('');
-    buffer.writeln('Decision:');
-    buffer.writeln('---END---');
-    buffer.writeln('');
-    buffer.writeln('EXAMPLE of a well-formatted question:');
-    buffer.writeln('---QUESTION---');
-    buffer.writeln('Background: GitHub Pages can be deployed from root, /docs folder, or gh-pages branch. The current workflow structure uses GitHub Actions with proper permissions already configured.');
-    buffer.writeln('');
-    buffer.writeln('Question: What deployment configuration should be used for GitHub Pages?');
-    buffer.writeln('');
-    buffer.writeln('Options:');
-    buffer.writeln('• Option A: Deploy from gh-pages branch (clean separation, standard approach)');
-    buffer.writeln('• Option B: Deploy from /docs folder on main branch (simpler, no separate branch)');
-    buffer.writeln('• Option C: Deploy from root on main branch (not recommended for this project structure)');
-    buffer.writeln('• Option D: Other deployment approach');
-    buffer.writeln('');
-    buffer.writeln('Decision:');
-    buffer.writeln('---END---');
-    buffer.writeln('');
-    buffer.writeln('Questions should clarify:');
-    buffer.writeln('- Ambiguous or missing technical requirements');
-    buffer.writeln('- Critical edge cases not covered');
-    buffer.writeln('- Important design decisions needed');
-    buffer.writeln('- Testing or performance considerations');
-    buffer.writeln('');
-    buffer.writeln('Examples of CLEAR tickets (no questions needed):');
-    buffer.writeln('- "Fix typo in login button: change Submitt to Submit"');
-    buffer.writeln('- "Update package.json version from 1.0.0 to 1.0.1"');
-    buffer.writeln('- "Remove unused import from UserService.java"');
+    buffer.writeln('IMPORTANT:');
+    buffer.writeln('- Always provide specific options (not vague "yes/no")');
+    buffer.writeln('- Include concrete examples in options');
+    buffer.writeln('- Leave "Decision:" empty for user to fill');
+    buffer.writeln('- Separate questions with ---QUESTION--- and ---END--- markers');
     buffer.writeln('');
     buffer.writeln('Decision: CLEAR or generate questions using the format above?');
     
@@ -317,7 +331,7 @@ class ClaudeProvider implements AIProvider {
         ],
         'system': 'You are an experienced Business Analyst specializing in writing clear, testable acceptance criteria. '
             'Your job is to create detailed Gherkin-style acceptance criteria based on ticket requirements and answers to clarification questions.',
-      });
+      },);
       
       final content = response.data['content'] as List;
       return content.first['text'] as String;

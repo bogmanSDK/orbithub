@@ -7,11 +7,11 @@
 ///   dart run bin/ai_teammate.dart AIH-1
 
 import 'dart:io';
-import '../lib/core/jira/jira_config.dart';
-import '../lib/core/jira/jira_client.dart';
-import '../lib/workflows/answer_checker.dart';
-import '../lib/ai/ai_provider.dart';
-import '../lib/ai/ai_factory.dart';
+import 'package:orbithub/core/jira/jira_config.dart';
+import 'package:orbithub/core/jira/jira_client.dart';
+import 'package:orbithub/workflows/answer_checker.dart';
+import 'package:orbithub/ai/ai_provider.dart';
+import 'package:orbithub/ai/ai_factory.dart';
 
 // Constants for status transitions
 const statusInReview = ['review', 'in review', 'pending review'];
@@ -130,7 +130,7 @@ _No clarification questions needed!_ 🚀
           }
           
           // Success summary
-          print('\n' + '=' * 60);
+          print('\n${'=' * 60}');
           print('✨ READY FOR IMPLEMENTATION');
           print('=' * 60);
           print('\n📊 Summary:');
@@ -239,7 +239,7 @@ Please answer these questions so I can proceed with implementation.
         }
         
         // Success summary
-        print('\n' + '=' * 60);
+        print('\n${'=' * 60}');
         print('✨ QUESTIONS CREATED SUCCESSFULLY');
         print('=' * 60);
         print('\n📊 Summary:');
@@ -293,7 +293,7 @@ Please answer these questions so I can proceed with implementation.
 **Progress**: ${answerStatus.answeredQuestions}/${answerStatus.totalQuestions} questions answered
 
 ${answerStatus.subtaskAnswers.map((s) => 
-  '${s.isAnswered ? "✅" : "⏳"} ${s.subtaskKey}: ${s.summary}'
+  '${s.isAnswered ? "✅" : "⏳"} ${s.subtaskKey}: ${s.summary}',
 ).join('\n')}
 
 ${answerStatus.allAnswered 
@@ -383,7 +383,7 @@ Thank you for providing answers to all questions!
 
 ## Summary:
 ${answerStatus.subtaskAnswers.map((s) => 
-  '✅ **${s.subtaskKey}**: ${s.summary}\n   Answer by ${s.answeredBy}'
+  '✅ **${s.subtaskKey}**: ${s.summary}\n   Answer by ${s.answeredBy}',
 ).join('\n\n')}
 
 ${acceptanceCriteria != null ? '\n## Generated Acceptance Criteria:\n\n$acceptanceCriteria\n' : ''}
@@ -425,7 +425,7 @@ _AI-powered implementation coming soon!_ 🤖
     }
     
     // Final summary
-    print('\n' + '=' * 60);
+    print('\n${'=' * 60}');
     print('✨ AI TEAMMATE WORKFLOW COMPLETE');
     print('=' * 60);
     print('\n📊 Summary:');

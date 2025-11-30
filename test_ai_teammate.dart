@@ -1,5 +1,6 @@
 /// Quick test for AI Teammate workflow
 /// Run with: dart run test_ai_teammate.dart
+library;
 
 import 'lib/core/jira/jira_config.dart';
 import 'lib/core/jira/jira_client.dart';
