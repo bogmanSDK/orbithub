@@ -18,8 +18,10 @@ OrbitHub is a complete Jira automation framework written in Dart. It provides a 
 - ✅ **Workflow Transitions** - Move tickets through statuses
 - ✅ **Labels & Assignments** - Manage labels and assignees
 - ✅ **Native Executables** - Compile to standalone binaries (no runtime!)
-- 🔄 **AI Integration** - (Coming soon) OpenAI/Claude for ticket analysis
-- 🔄 **GitHub Integration** - (Coming soon) Source control automation
+- ✅ **AI Integration** - OpenAI/Claude for intelligent ticket analysis
+- ✅ **Structured Questions** - Background, Question, Options, Decision format
+- ✅ **GitHub Actions** - Automated workflows with Jira integration
+- 🔄 **Code Generation** - (Coming soon) AI-powered implementation plans
 
 ## 🎯 Why OrbitHub?
 
