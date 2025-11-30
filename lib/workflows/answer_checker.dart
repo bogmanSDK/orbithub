@@ -107,29 +107,46 @@ class AnswerChecker {
       );
     }
     
-    final comments = await jira.getComments(subtaskKey);
+    // Check for answers in Description field only (Decision: section) - like dmtools
+    final description = subtask.fields.description ?? '';
+    final answers = <String>[];
+    String? answeredBy;
+    String? answeredAt;
     
-    // Consider any comment as a potential answer
-    // (AI may not always post an initial comment if question is in description)
-    final userComments = comments.toList();
+    if (description.isNotEmpty) {
+      // Look for "Decision:" section in description
+      final decisionMatch = RegExp(
+        r'Decision:\s*(.+?)(?:\n\n|$)',
+        multiLine: true,
+        dotAll: true,
+      ).firstMatch(description);
+      
+      if (decisionMatch != null) {
+        final decisionText = decisionMatch.group(1)?.trim() ?? '';
+        // Check if decision is actually filled in (not empty, not just "Decision:", not placeholder)
+        if (decisionText.isNotEmpty && 
+            decisionText.toLowerCase() != 'decision:' &&
+            !decisionText.contains('---END---')) {
+          answers.add(decisionText);
+          // Mark as answered by assignee or reporter
+          answeredBy = subtask.fields.assignee?.displayName ?? 
+                       subtask.fields.reporter?.displayName ?? 
+                       'User';
+          answeredAt = subtask.fields.updated ?? subtask.fields.created;
+        }
+      }
+    }
     
-    // Consider answered if there's at least one comment
-    final isAnswered = userComments.isNotEmpty;
-    
-    final answers = userComments
-        .map((c) => c.body ?? '')
-        .where((body) => body.isNotEmpty)
-        .toList();
-    
-    final lastComment = userComments.isNotEmpty ? userComments.last : null;
+    // Consider answered if there's at least one answer in description
+    final isAnswered = answers.isNotEmpty;
     
     return SubtaskAnswer(
       subtaskKey: subtaskKey,
       summary: subtask.fields.summary ?? 'No summary',
       isAnswered: isAnswered,
       answers: answers,
-      answeredBy: lastComment?.author?.displayName,
-      answeredAt: lastComment?.created,
+      answeredBy: answeredBy,
+      answeredAt: answeredAt,
     );
   }
   
