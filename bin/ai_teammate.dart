@@ -318,17 +318,60 @@ ${answerStatus.allAnswered
     
     // Step 6: Collect answers
     print('\n📝 Step 6: Collecting answers...');
-    // final answersText = checker.collectAnswersForAI(answerStatus);
-    print('   ✅ Collected ${answerStatus.answeredQuestions} answer(s)');
+    final questionsAndAnswers = <String, String>{};
+    for (final subtaskAnswer in answerStatus.subtaskAnswers) {
+      if (subtaskAnswer.isAnswered && subtaskAnswer.answers.isNotEmpty) {
+        // Get the subtask to extract question text
+        try {
+          final subtaskTicket = await jira.getTicket(subtaskAnswer.subtaskKey);
+          final questionText = subtaskTicket.fields.summary ?? subtaskAnswer.subtaskKey;
+          final answerText = subtaskAnswer.answers.join('\n');
+          questionsAndAnswers[questionText] = answerText;
+        } catch (e) {
+          print('   ⚠️  Could not fetch ${subtaskAnswer.subtaskKey}: $e');
+        }
+      }
+    }
+    print('   ✅ Collected ${questionsAndAnswers.length} answer(s)');
     
-    // Step 7: Generate implementation plan
-    print('\n🤖 Step 7: Processing answers and generating plan...');
-    print('   ⚠️  AI integration not yet implemented');
-    print('   📝 TODO: Call OpenAI/Claude to:');
-    print('      - Analyze original ticket');
-    print('      - Review all answers');
-    print('      - Generate implementation plan');
-    print('      - Create PRs/commits');
+    // Step 7: Generate Acceptance Criteria
+    print('\n📋 Step 7: Generating Acceptance Criteria...');
+    String? acceptanceCriteria;
+    try {
+      // Initialize AI provider
+      final aiConfig = AIConfig.fromEnvironment();
+      final ai = AIFactory.create(aiConfig);
+      
+      acceptanceCriteria = await ai.generateAcceptanceCriteria(
+        ticketTitle: ticket.fields.summary ?? ticketKey,
+        ticketDescription: ticket.fields.description ?? '',
+        questionsAndAnswers: questionsAndAnswers,
+        existingDescription: ticket.fields.description,
+      );
+      
+      print('   ✅ Acceptance Criteria generated');
+      print('   📄 Length: ${acceptanceCriteria.length} characters');
+      
+      // Step 7a: Update Description field with AC
+      print('\n📝 Step 7a: Updating ticket description with AC...');
+      try {
+        // Combine existing description with AC
+        final currentDesc = ticket.fields.description ?? '';
+        final updatedDescription = currentDesc.isNotEmpty 
+            ? '$currentDesc\n\n---\n\n$acceptanceCriteria'
+            : acceptanceCriteria;
+        
+        await jira.updateDescription(ticketKey, updatedDescription, useMarkdown: true);
+        print('   ✅ Description updated with Acceptance Criteria');
+      } catch (e) {
+        print('   ⚠️  Could not update description: $e');
+        print('   💡 AC will be posted as comment instead');
+      }
+      
+    } catch (e) {
+      print('   ⚠️  Failed to generate AC: $e');
+      print('   💡 Continuing without AC generation');
+    }
     
     // Step 8: Post completion comment
     print('\n💬 Step 8: Posting completion comment...');
@@ -343,7 +386,10 @@ ${answerStatus.subtaskAnswers.map((s) =>
   '✅ **${s.subtaskKey}**: ${s.summary}\n   Answer by ${s.answeredBy}'
 ).join('\n\n')}
 
+${acceptanceCriteria != null ? '\n## Generated Acceptance Criteria:\n\n$acceptanceCriteria\n' : ''}
+
 ## Next Steps:
+✅ Acceptance Criteria have been added to the ticket description
 ⚠️ AI implementation phase is not yet available.
 
 **Manual next steps:**

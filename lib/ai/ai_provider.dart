@@ -22,6 +22,16 @@ abstract class AIProvider {
     required String ticketDescription,
     required Map<String, String> questionsAndAnswers,
   });
+  
+  /// Generate acceptance criteria based on answers to questions
+  /// 
+  /// Returns Gherkin-style acceptance criteria in markdown format
+  Future<String> generateAcceptanceCriteria({
+    required String ticketTitle,
+    required String ticketDescription,
+    required Map<String, String> questionsAndAnswers,
+    String? existingDescription,
+  });
 }
 
 /// Configuration for AI providers
@@ -53,28 +63,28 @@ class AIConfig {
     if (apiKey == null || apiKey.isEmpty) {
       try {
         final file = File('.env');
-        if (file.existsSync()) {
-          final lines = file.readAsLinesSync();
-          for (final line in lines) {
-            if (line.trim().isEmpty || line.trim().startsWith('#')) continue;
-            
-            final parts = line.split('=');
-            if (parts.length >= 2) {
-              final key = parts[0].trim();
-              final value = parts.sublist(1).join('=').trim();
+          if (file.existsSync()) {
+            final lines = file.readAsLinesSync();
+            for (final line in lines) {
+              if (line.trim().isEmpty || line.trim().startsWith('#')) continue;
               
-              if (key == 'AI_PROVIDER' && (providerStr == null || providerStr.isEmpty)) {
-                providerStr = value;
-              } else if (key == 'AI_API_KEY' && (apiKey == null || apiKey.isEmpty)) {
-                apiKey = value;
-              } else if (key == 'AI_MODEL' && (model == null || model.isEmpty)) {
-                model = value;
-              } else if (key == 'AI_TEMPERATURE' && (temperatureStr == null || temperatureStr.isEmpty)) {
-                temperatureStr = value;
-              } else if (key == 'AI_MAX_TOKENS' && (maxTokensStr == null || maxTokensStr.isEmpty)) {
-                maxTokensStr = value;
+              final parts = line.split('=');
+              if (parts.length >= 2) {
+                final key = parts[0].trim();
+                final value = parts.sublist(1).join('=').trim();
+                
+                if (key == 'AI_PROVIDER' && (providerStr == null || providerStr.isEmpty)) {
+                  providerStr = value;
+                } else if (key == 'AI_API_KEY' && (apiKey == null || apiKey.isEmpty)) {
+                  apiKey = value;
+                } else if (key == 'AI_MODEL' && (model == null || model.isEmpty)) {
+                  model = value;
+                } else if (key == 'AI_TEMPERATURE' && (temperatureStr == null || temperatureStr.isEmpty)) {
+                  temperatureStr = value;
+                } else if (key == 'AI_MAX_TOKENS' && (maxTokensStr == null || maxTokensStr.isEmpty)) {
+                  maxTokensStr = value;
+                }
               }
-            }
           }
         }
       } catch (e) {

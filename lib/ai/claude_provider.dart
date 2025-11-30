@@ -289,5 +289,136 @@ class ClaudeProvider implements AIProvider {
     
     return questions;
   }
+  
+  @override
+  Future<String> generateAcceptanceCriteria({
+    required String ticketTitle,
+    required String ticketDescription,
+    required Map<String, String> questionsAndAnswers,
+    String? existingDescription,
+  }) async {
+    final prompt = _buildAcceptanceCriteriaPrompt(
+      ticketTitle: ticketTitle,
+      ticketDescription: ticketDescription,
+      questionsAndAnswers: questionsAndAnswers,
+      existingDescription: existingDescription,
+    );
+    
+    try {
+      final response = await _dio.post('/messages', data: {
+        'model': config.model ?? 'claude-3-5-sonnet-20241022',
+        'max_tokens': config.maxTokens,
+        'temperature': config.temperature,
+        'messages': [
+          {
+            'role': 'user',
+            'content': prompt,
+          }
+        ],
+        'system': 'You are an experienced Business Analyst specializing in writing clear, testable acceptance criteria. '
+            'Your job is to create detailed Gherkin-style acceptance criteria based on ticket requirements and answers to clarification questions.',
+      });
+      
+      final content = response.data['content'] as List;
+      return content.first['text'] as String;
+    } on DioException catch (e) {
+      final statusCode = e.response?.statusCode;
+      
+      if (statusCode == 429) {
+        throw Exception('Claude rate limit exceeded. Please try again in a few minutes.');
+      } else if (statusCode == 401 || statusCode == 403) {
+        throw Exception('Invalid Claude API key. Check your AI_API_KEY');
+      }
+      
+      throw Exception('Claude API error: ${e.response?.data ?? e.message}');
+    } catch (e) {
+      throw Exception('Claude API error: $e');
+    }
+  }
+  
+  String _buildAcceptanceCriteriaPrompt({
+    required String ticketTitle,
+    required String ticketDescription,
+    required Map<String, String> questionsAndAnswers,
+    String? existingDescription,
+  }) {
+    final buffer = StringBuffer();
+    
+    buffer.writeln('You are an experienced Business Analyst creating acceptance criteria.');
+    buffer.writeln('');
+    buffer.writeln('**Original Ticket:**');
+    buffer.writeln('Title: $ticketTitle');
+    buffer.writeln('Description: ${ticketDescription.isEmpty ? "(No description provided)" : ticketDescription}');
+    
+    if (existingDescription != null && existingDescription.isNotEmpty) {
+      buffer.writeln('');
+      buffer.writeln('**Existing Description:**');
+      buffer.writeln(existingDescription);
+    }
+    
+    buffer.writeln('');
+    buffer.writeln('**Questions and Answers:**');
+    buffer.writeln('');
+    questionsAndAnswers.forEach((question, answer) {
+      // Extract just the question text if it's in structured format
+      final questionMatch = RegExp(r'Question:\s*(.+?)(?:\n|$)', multiLine: true)
+          .firstMatch(question);
+      final questionText = questionMatch?.group(1)?.trim() ?? question;
+      
+      buffer.writeln('Q: $questionText');
+      buffer.writeln('A: $answer');
+      buffer.writeln('');
+    });
+    
+    buffer.writeln('');
+    buffer.writeln('TASK: Create comprehensive Gherkin-style acceptance criteria based on the ticket and all answers.');
+    buffer.writeln('');
+    buffer.writeln('FORMAT: Use this structure:');
+    buffer.writeln('');
+    buffer.writeln('## Acceptance Criteria');
+    buffer.writeln('');
+    buffer.writeln('### Scenario 1: [Scenario Name]');
+    buffer.writeln('');
+    buffer.writeln('**Given** [initial context]');
+    buffer.writeln('**When** [action is performed]');
+    buffer.writeln('**Then** [expected result]');
+    buffer.writeln('**And** [additional conditions]');
+    buffer.writeln('');
+    buffer.writeln('### Scenario 2: [Another Scenario]');
+    buffer.writeln('...');
+    buffer.writeln('');
+    buffer.writeln('REQUIREMENTS:');
+    buffer.writeln('- Use SPECIFIC details from the answers (colors, values, configurations, etc.)');
+    buffer.writeln('- Make criteria TESTABLE and MEASURABLE');
+    buffer.writeln('- Include edge cases and error scenarios');
+    buffer.writeln('- Follow Gherkin Given-When-Then format');
+    buffer.writeln('- Create 2-5 scenarios covering main functionality');
+    buffer.writeln('- Be concrete, not generic');
+    buffer.writeln('');
+    buffer.writeln('EXAMPLE (for reference):');
+    buffer.writeln('');
+    buffer.writeln('## Acceptance Criteria');
+    buffer.writeln('');
+    buffer.writeln('### Scenario 1: User enables dark theme');
+    buffer.writeln('');
+    buffer.writeln('**Given** the user is logged in and on the settings page');
+    buffer.writeln('**When** the user toggles the dark theme switch to ON');
+    buffer.writeln('**Then** the primary background color changes to #1a1a1a');
+    buffer.writeln('**And** the text color changes to #ffffff');
+    buffer.writeln('**And** the accent color changes to #0066cc');
+    buffer.writeln('**And** the theme preference is saved to user profile');
+    buffer.writeln('**And** all UI components respect the dark theme setting');
+    buffer.writeln('');
+    buffer.writeln('### Scenario 2: Theme persists across sessions');
+    buffer.writeln('');
+    buffer.writeln('**Given** the user has enabled dark theme');
+    buffer.writeln('**When** the user logs out and logs back in');
+    buffer.writeln('**Then** the dark theme is still active');
+    buffer.writeln('**And** all pages display with dark theme colors');
+    buffer.writeln('');
+    buffer.writeln('Now generate acceptance criteria for the ticket above:');
+    
+    return buffer.toString();
+  }
 }
 
