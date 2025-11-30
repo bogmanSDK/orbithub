@@ -1,5 +1,7 @@
 import 'package:dart_openai/dart_openai.dart';
 import 'ai_provider.dart';
+import '../core/confluence/confluence_client.dart';
+import '../core/confluence/template_config.dart';
 
 /// OpenAI implementation of AI provider
 /// 
@@ -7,8 +9,15 @@ import 'ai_provider.dart';
 /// Do not create multiple instances with different API keys simultaneously.
 class OpenAIProvider implements AIProvider {
   final AIConfig config;
+  final ConfluenceClient? _confluenceClient;
+  final TemplateConfig _templateConfig;
   
-  OpenAIProvider(this.config) {
+  OpenAIProvider(
+    this.config, {
+    ConfluenceClient? confluenceClient,
+    TemplateConfig? templateConfig,
+  })  : _confluenceClient = confluenceClient,
+        _templateConfig = templateConfig ?? TemplateConfig.hardcoded() {
     OpenAI.apiKey = config.apiKey;
     if (config.model != null) {
       OpenAI.requestsTimeOut = const Duration(seconds: 60);
@@ -22,7 +31,7 @@ class OpenAIProvider implements AIProvider {
     String? projectContext,
     int maxQuestions = 5,
   }) async {
-    final prompt = _buildQuestionsPrompt(
+    final prompt = await _buildQuestionsPrompt(
       ticketTitle: ticketTitle,
       ticketDescription: ticketDescription,
       projectContext: projectContext,
@@ -122,12 +131,94 @@ class OpenAIProvider implements AIProvider {
     }
   }
   
-  String _buildQuestionsPrompt({
+  /// Load template from Confluence or use hardcoded
+  Future<String> _loadTemplate(String templateType) async {
+    if (_templateConfig.usesConfluence && _confluenceClient != null) {
+      final url = _templateConfig.getTemplateUrl(templateType);
+      if (url != null) {
+        try {
+          print('   📚 Loading $templateType template from Confluence...');
+          final content = await _confluenceClient!.getPlainTextContent(url);
+          print('   ✅ Template loaded (${content.length} chars)');
+          return content;
+        } catch (e) {
+          print('   ⚠️  Failed to load Confluence template: $e');
+          print('   💡 Falling back to hardcoded template');
+        }
+      }
+    }
+    return _getHardcodedTemplate(templateType);
+  }
+
+  /// Get hardcoded template (fallback)
+  String _getHardcodedTemplate(String templateType) {
+    switch (templateType) {
+      case 'questions':
+        return _getHardcodedQuestionsTemplate();
+      case 'acceptance_criteria':
+        return _getHardcodedACTemplate();
+      default:
+        return '';
+    }
+  }
+
+  String _getHardcodedQuestionsTemplate() {
+    return '''
+FORMAT REQUIREMENTS:
+Each question MUST follow this EXACT structure:
+
+---QUESTION---
+Background: [Brief context explaining why this question is important]
+
+Question: [Clear, specific question]
+
+Options:
+• Option A: [First possible approach/answer]
+• Option B: [Second possible approach/answer]
+• Option C: [Third possible approach/answer]
+• Option D: Other (please specify)
+
+Decision:
+---END---
+
+EXAMPLE of a well-formatted question:
+---QUESTION---
+Background: GitHub Pages can be deployed from root, /docs folder, or gh-pages branch.
+
+Question: What deployment configuration should be used for GitHub Pages?
+
+Options:
+• Option A: Deploy from gh-pages branch (clean separation, standard approach)
+• Option B: Deploy from /docs folder on main branch (simpler, no separate branch)
+• Option C: Deploy from root on main branch (not recommended for this project structure)
+• Option D: Other (please specify)
+
+Decision:
+---END---
+''';
+  }
+
+  String _getHardcodedACTemplate() {
+    return '''
+FORMAT: Use Gherkin format (Given-When-Then) with Jira Markdown
+
+Example:
+h3. Acceptance Criteria
+{code:gherkin}
+Given the user is on the login page
+When the user enters valid credentials
+Then the user should be redirected to the dashboard
+And a success message should be displayed
+{code}
+''';
+  }
+
+  Future<String> _buildQuestionsPrompt({
     required String ticketTitle,
     required String ticketDescription,
     String? projectContext,
     required int maxQuestions,
-  }) {
+  }) async {
     final buffer = StringBuffer();
     
     buffer.writeln('You are a senior software engineer reviewing a Jira ticket.');
@@ -153,47 +244,17 @@ class OpenAIProvider implements AIProvider {
     buffer.writeln('IF there are unclear points that need clarification:');
     buffer.writeln('  → Generate 1-$maxQuestions specific technical questions');
     buffer.writeln('  → Focus on critical missing information only');
-    buffer.writeln('  → Each question MUST follow this EXACT format:');
     buffer.writeln('');
-    buffer.writeln('---QUESTION---');
-    buffer.writeln('Background: [Brief context explaining why this question is important]');
+    
+    // Load template (from Confluence or hardcoded)
+    final template = await _loadTemplate('questions');
+    buffer.write(template);
     buffer.writeln('');
-    buffer.writeln('Question: [Clear, specific question]');
-    buffer.writeln('');
-    buffer.writeln('Options:');
-    buffer.writeln('• Option A: [First possible approach/answer]');
-    buffer.writeln('• Option B: [Second possible approach/answer]');
-    buffer.writeln('• Option C: [Third possible approach/answer]');
-    buffer.writeln('• Option D: [Fourth possible approach/answer or "Other (please specify)"]');
-    buffer.writeln('');
-    buffer.writeln('Decision:');
-    buffer.writeln('---END---');
-    buffer.writeln('');
-    buffer.writeln('EXAMPLE of a well-formatted question:');
-    buffer.writeln('---QUESTION---');
-    buffer.writeln('Background: GitHub Pages can be deployed from root, /docs folder, or gh-pages branch. The current workflow structure uses GitHub Actions with proper permissions already configured.');
-    buffer.writeln('');
-    buffer.writeln('Question: What deployment configuration should be used for GitHub Pages?');
-    buffer.writeln('');
-    buffer.writeln('Options:');
-    buffer.writeln('• Option A: Deploy from gh-pages branch (clean separation, standard approach)');
-    buffer.writeln('• Option B: Deploy from /docs folder on main branch (simpler, no separate branch)');
-    buffer.writeln('• Option C: Deploy from root on main branch (not recommended for this project structure)');
-    buffer.writeln('• Option D: Other deployment approach');
-    buffer.writeln('');
-    buffer.writeln('Decision:');
-    buffer.writeln('---END---');
-    buffer.writeln('');
-    buffer.writeln('Questions should clarify:');
-    buffer.writeln('- Ambiguous or missing technical requirements');
-    buffer.writeln('- Critical edge cases not covered');
-    buffer.writeln('- Important design decisions needed');
-    buffer.writeln('- Testing or performance considerations');
-    buffer.writeln('');
-    buffer.writeln('Examples of CLEAR tickets (no questions needed):');
-    buffer.writeln('- "Fix typo in login button: change Submitt to Submit"');
-    buffer.writeln('- "Update package.json version from 1.0.0 to 1.0.1"');
-    buffer.writeln('- "Remove unused import from UserService.java"');
+    buffer.writeln('IMPORTANT:');
+    buffer.writeln('- Always provide specific options (not vague "yes/no")');
+    buffer.writeln('- Include concrete examples in options');
+    buffer.writeln('- Leave "Decision:" empty for user to fill');
+    buffer.writeln('- Separate questions with ---QUESTION--- and ---END--- markers');
     buffer.writeln('');
     buffer.writeln('Decision: CLEAR or generate questions using the format above?');
     
