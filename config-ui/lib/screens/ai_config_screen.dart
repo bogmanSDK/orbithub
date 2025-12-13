@@ -44,7 +44,9 @@ class AIConfigScreen extends StatelessWidget {
               ConfigTextField(
                 label: 'API Key *',
                 value: config.aiApiKey,
-                helpText: 'Your AI provider API key',
+                helpText: config.aiProvider == 'claude' 
+                    ? 'Your Claude API key. Get it from: https://console.anthropic.com/settings/keys'
+                    : 'Your OpenAI API key. Get it from: https://platform.openai.com/api-keys',
                 obscureText: true,
                 onChanged: (value) {
                   onConfigChanged(config.copyWith(aiApiKey: value));

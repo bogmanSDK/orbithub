@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:config_ui/widgets/clickable_link_text.dart';
 
 /// Reusable text field widget for configuration
 class ConfigTextField extends StatefulWidget {
@@ -45,10 +46,6 @@ class _ConfigTextFieldState extends State<ConfigTextField> {
         widget.onChanged!(_controller.text);
       }
     });
-    
-    if (_initialValue.isNotEmpty) {
-      print('ConfigTextField ${widget.label} initialized with: ${_initialValue.substring(0, _initialValue.length.clamp(0, 20))}...');
-    }
   }
   
   @override
@@ -67,7 +64,6 @@ class _ConfigTextFieldState extends State<ConfigTextField> {
             widget.onChanged!(_controller.text);
           }
         });
-        print('Updated ${widget.label}: old="${oldWidget.value?.substring(0, 20)}" new="${newValue.substring(0, newValue.length.clamp(0, 20))}"');
       }
     }
   }
@@ -121,8 +117,8 @@ class _ConfigTextFieldState extends State<ConfigTextField> {
         ),
         if (widget.helpText != null && widget.errorText == null) ...[
           const SizedBox(height: 4),
-          Text(
-            widget.helpText!,
+          ClickableLinkText(
+            text: widget.helpText!,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
               color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),

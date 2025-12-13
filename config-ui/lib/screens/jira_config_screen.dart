@@ -42,7 +42,7 @@ class JiraConfigScreen extends StatelessWidget {
           ConfigTextField(
             label: 'API Token *',
             value: config.jiraApiToken,
-            helpText: 'Your Jira API token (get it from https://id.atlassian.com/manage-profile/security/api-tokens)',
+            helpText: 'Your Jira API token. Get it from: https://id.atlassian.com/manage-profile/security/api-tokens',
             obscureText: true,
             onChanged: (value) {
               onConfigChanged(config.copyWith(jiraApiToken: value));
