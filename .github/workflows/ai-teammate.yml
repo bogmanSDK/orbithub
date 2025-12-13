@@ -29,8 +29,8 @@ jobs:
       - name: 📚 Install dependencies
         run: dart pub get
       
-      - name: 🔨 Generate code
-        run: dart run build_runner build --delete-conflicting-outputs
+      - name: 🔨 Generate MCP tool files
+        run: dart run tool/generate_mcp_files.dart
       
       - name: 🔧 Setup environment
         env:
@@ -76,9 +76,17 @@ jobs:
         run: |
           # Get ticket key from either manual trigger or webhook
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            TICKET_KEY="${{ inputs.ticket_key }}"
+            TICKET_KEY="${{ github.event.inputs.ticket_key }}"
           else
             TICKET_KEY="${{ github.event.client_payload.ticket_key }}"
+          fi
+          
+          if [ -z "$TICKET_KEY" ]; then
+            echo "❌ Error: Ticket key is empty"
+            echo "Event name: ${{ github.event_name }}"
+            echo "Available inputs: ${{ toJSON(github.event.inputs) }}"
+            echo "Available client_payload: ${{ toJSON(github.event.client_payload) }}"
+            exit 1
           fi
           
           echo "🎯 Processing ticket: $TICKET_KEY"
@@ -89,7 +97,12 @@ jobs:
         run: |
           echo "### AI Teammate Workflow Complete 🤖" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Ticket**: ${{ inputs.ticket_key || github.event.client_payload.ticket_key }}" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TICKET_KEY="${{ github.event.inputs.ticket_key }}"
+          else
+            TICKET_KEY="${{ github.event.client_payload.ticket_key }}"
+          fi
+          echo "**Ticket**: $TICKET_KEY" >> $GITHUB_STEP_SUMMARY
           echo "**Status**: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
           echo "**Triggered by**: ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
 
