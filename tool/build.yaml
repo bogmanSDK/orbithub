@@ -1,0 +1,7 @@
+builders:
+  mcpToolBuilder:
+    import: "tool/builder.dart"
+    builder_factories: ["mcpToolBuilder"]
+    build_extensions: {r'$lib$': ['mcp/generated/mcp_tool_registry.g.dart']}
+    auto_apply: dependents
+    build_to: source

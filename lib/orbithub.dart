@@ -32,4 +32,16 @@ export 'core/jira/models/jira_search_result.dart';
 // Exceptions
 export 'core/jira/exceptions/jira_exception.dart';
 
+// MCP exports
+export 'mcp/annotations.dart';
+export 'mcp/tool_definitions.dart';
+export 'mcp/tool_registry.dart';
+export 'mcp/tool_executor.dart';
+export 'mcp/cli/mcp_cli_handler.dart';
+export 'mcp/clients/client_factory.dart';
+export 'mcp/json/json_converter.dart';
+export 'mcp/doc_generator.dart';
+export 'mcp/server/mcp_server.dart';
+export 'mcp/wrappers/jira_operation_wrapper.dart';
+
 

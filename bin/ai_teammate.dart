@@ -9,6 +9,7 @@
 import 'dart:io';
 import 'package:orbithub/core/jira/jira_config.dart';
 import 'package:orbithub/core/jira/jira_client.dart';
+import 'package:orbithub/mcp/wrappers/jira_operation_wrapper.dart';
 import 'package:orbithub/workflows/answer_checker.dart';
 import 'package:orbithub/ai/ai_provider.dart';
 import 'package:orbithub/ai/ai_factory.dart';
@@ -36,21 +37,28 @@ void main(List<String> args) async {
   print('📋 Processing ticket: $ticketKey\n');
   
   try {
-    // Initialize Jira client
-    final config = JiraConfig.fromEnvironment();
-    final jira = JiraClient(config);
-    final checker = AnswerChecker(jira);
+    // Initialize Jira operations wrapper (supports both direct calls and MCP tools)
+    final wrapper = JiraOperationWrapper();
+    final checker = wrapper.isUsingMcpTools 
+        ? AnswerChecker.withWrapper(wrapper)
+        : AnswerChecker(JiraClient(JiraConfig.fromEnvironment()));
+    
+    if (wrapper.isUsingMcpTools) {
+      print('   🔧 Using MCP tools mode');
+    } else {
+      print('   🔧 Using direct JiraClient mode');
+    }
     
     // Step 1: Get ticket details
     print('📥 Step 1: Fetching ticket details...');
-    final ticket = await jira.getTicket(ticketKey);
+    final ticket = await wrapper.getTicket(ticketKey);
     print('   Title: ${ticket.fields.summary}');
     print('   Status: ${ticket.fields.status?.name}');
     print('   Assignee: ${ticket.fields.assignee?.displayName ?? "Unassigned"}');
     
     // Step 2: Check for existing subtasks
     print('\n📋 Step 2: Checking for existing questions...');
-    final subtasks = await jira.getSubtasks(ticketKey);
+    final subtasks = await wrapper.getSubtasks(ticketKey);
     
     if (subtasks.isEmpty) {
       print('   ℹ️  No existing questions found');
@@ -102,13 +110,13 @@ Moving this ticket to "In Progress" and beginning work immediately.
 _No clarification questions needed!_ 🚀
 ''';
           
-          await jira.postComment(ticketKey, clearComment, useMarkdown: true);
+          await wrapper.postComment(ticketKey, clearComment, useMarkdown: true);
           print('   ✅ Comment posted');
           
           // Move to In Progress
           print('\n🔄 Step 5: Moving to "In Progress"...');
           try {
-            final transitions = await jira.getTransitions(ticketKey);
+            final transitions = await wrapper.getTransitions(ticketKey);
             final progressTransition = transitions.where((t) {
               final toName = t.to?.name?.toLowerCase() ?? t.name?.toLowerCase() ?? '';
               return statusInProgress.any((keyword) => toName.contains(keyword));
@@ -117,7 +125,7 @@ _No clarification questions needed!_ 🚀
             if (progressTransition != null) {
               final targetStatus = progressTransition.to?.name ?? progressTransition.name;
               if (targetStatus != null) {
-                await jira.moveToStatus(ticketKey, targetStatus);
+                await wrapper.moveToStatus(ticketKey, targetStatus);
                 print('   ✅ Moved to "$targetStatus"');
               } else {
                 print('   ⚠️  Could not determine target status');
@@ -137,7 +145,7 @@ _No clarification questions needed!_ 🚀
           print('   Ticket: $ticketKey');
           print('   Status: Clear requirements ✅');
           print('   Action: Proceeding with implementation');
-          print('\n🔗 View ticket: ${jira.getTicketBrowseUrl(ticketKey)}');
+          print('\n🔗 View ticket: ${wrapper.getTicketBrowseUrl(ticketKey)}');
           print('\n💡 Next: AI will implement the feature (coming soon)');
           
           exit(0);
@@ -162,7 +170,7 @@ _No clarification questions needed!_ 🚀
           print('   Creating: $summary');
           
           try {
-            final subtask = await jira.createSubtask(
+            final subtask = await wrapper.createSubtask(
               parentKey: ticketKey,
               summary: summary,
               description: questionText, // Full structured question as description
@@ -196,7 +204,7 @@ Please answer these questions so I can proceed with implementation.
 3. Move status to "To Do"
 ''';
         
-        await jira.postComment(ticketKey, comment, useMarkdown: true);
+        await wrapper.postComment(ticketKey, comment, useMarkdown: true);
         print('   ✅ Comment posted');
         
         // Reassign to reporter
@@ -204,7 +212,7 @@ Please answer these questions so I can proceed with implementation.
         final reporter = ticket.fields.reporter;
         if (reporter != null && reporter.accountId != null) {
           try {
-            await jira.assignTicket(ticketKey, reporter.accountId!);
+            await wrapper.assignTicket(ticketKey, reporter.accountId!);
             print('   ✅ Assigned to: ${reporter.displayName}');
           } catch (e) {
             print('   ⚠️  Could not reassign: $e');
@@ -216,7 +224,7 @@ Please answer these questions so I can proceed with implementation.
         // Move to In Review
         print('\n🔄 Step 7: Moving to "In Review"...');
         try {
-          final transitions = await jira.getTransitions(ticketKey);
+          final transitions = await wrapper.getTransitions(ticketKey);
           final reviewTransition = transitions.where((t) {
             final toName = t.to?.name?.toLowerCase() ?? t.name?.toLowerCase() ?? '';
             return statusInReview.any((keyword) => toName.contains(keyword));
@@ -225,7 +233,7 @@ Please answer these questions so I can proceed with implementation.
           if (reviewTransition != null) {
             final targetStatus = reviewTransition.to?.name ?? reviewTransition.name;
             if (targetStatus != null) {
-              await jira.moveToStatus(ticketKey, targetStatus);
+              await wrapper.moveToStatus(ticketKey, targetStatus);
               print('   ✅ Moved to "$targetStatus"');
             } else {
               print('   ⚠️  Could not determine target status');
@@ -246,7 +254,7 @@ Please answer these questions so I can proceed with implementation.
         print('   Ticket: $ticketKey');
         print('   Questions created: ${createdSubtasks.length}');
         print('   Status: Waiting for answers');
-        print('\n🔗 View ticket: ${jira.getTicketBrowseUrl(ticketKey)}');
+        print('\n🔗 View ticket: ${wrapper.getTicketBrowseUrl(ticketKey)}');
         print('\n💡 Next: Answer the subtasks, then assign back to AI Agent');
         
         exit(0);
@@ -301,7 +309,7 @@ ${answerStatus.allAnswered
   : '⏳ **Waiting for answers** to remaining questions.'}
 ''';
       
-      await jira.postComment(ticketKey, statusComment, useMarkdown: true);
+      await wrapper.postComment(ticketKey, statusComment, useMarkdown: true);
       print('   ✅ Status comment posted');
       
       print('\n⏸️  Workflow paused - waiting for all answers');
@@ -323,7 +331,7 @@ ${answerStatus.allAnswered
       if (subtaskAnswer.isAnswered && subtaskAnswer.answers.isNotEmpty) {
         // Get the subtask to extract question text
         try {
-          final subtaskTicket = await jira.getTicket(subtaskAnswer.subtaskKey);
+          final subtaskTicket = await wrapper.getTicket(subtaskAnswer.subtaskKey);
           final questionText = subtaskTicket.fields.summary ?? subtaskAnswer.subtaskKey;
           final answerText = subtaskAnswer.answers.join('\n');
           questionsAndAnswers[questionText] = answerText;
@@ -361,7 +369,7 @@ ${answerStatus.allAnswered
             ? '$currentDesc\n\n---\n\n$acceptanceCriteria'
             : acceptanceCriteria;
         
-        await jira.updateDescription(ticketKey, updatedDescription, useMarkdown: true);
+        await wrapper.updateDescription(ticketKey, updatedDescription, useMarkdown: true);
         print('   ✅ Description updated with Acceptance Criteria');
       } catch (e) {
         print('   ⚠️  Could not update description: $e');
@@ -401,13 +409,13 @@ ${acceptanceCriteria != null ? '\n## Generated Acceptance Criteria:\n\n$acceptan
 _AI-powered implementation coming soon!_ 🤖
 ''';
     
-    await jira.postComment(ticketKey, completionComment, useMarkdown: true);
+    await wrapper.postComment(ticketKey, completionComment, useMarkdown: true);
     print('   ✅ Completion comment posted');
     
     // Step 9: Move to In Progress
     print('\n🔄 Step 9: Updating ticket status...');
     try {
-      final transitions = await jira.getTransitions(ticketKey);
+      final transitions = await wrapper.getTransitions(ticketKey);
       final inProgressTransition = transitions.where((t) {
         final toName = t.to?.name?.toLowerCase() ?? '';
         return toName.contains('progress');
@@ -415,7 +423,7 @@ _AI-powered implementation coming soon!_ 🤖
       
       if (inProgressTransition != null) {
         final targetStatus = inProgressTransition.to?.name ?? inProgressTransition.name;
-        await jira.moveToStatus(ticketKey, targetStatus!);
+        await wrapper.moveToStatus(ticketKey, targetStatus!);
         print('   ✅ Moved to "$targetStatus"');
       } else {
         print('   ⚠️  "In Progress" transition not available');
@@ -433,7 +441,7 @@ _AI-powered implementation coming soon!_ 🤖
     print('   Questions: ${answerStatus.totalQuestions}');
     print('   Answers: ${answerStatus.answeredQuestions}');
     print('   Status: ✅ All questions answered');
-    print('\n🔗 View ticket: ${jira.getTicketBrowseUrl(ticketKey)}');
+    print('\n🔗 View ticket: ${wrapper.getTicketBrowseUrl(ticketKey)}');
     print('\n💡 Next: Implement AI-powered code generation');
     
   } catch (e, stackTrace) {

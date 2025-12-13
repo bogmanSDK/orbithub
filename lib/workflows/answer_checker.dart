@@ -3,6 +3,7 @@
 library;
 import '../core/jira/jira_client.dart';
 import '../core/jira/models/jira_ticket.dart';
+import '../mcp/wrappers/jira_operation_wrapper.dart';
 
 /// Status of a ticket with questions
 class TicketAnswerStatus {
@@ -56,14 +57,41 @@ class SubtaskAnswer {
 
 /// Checks if subtasks have been answered
 class AnswerChecker {
-  final JiraClient jira;
+  final JiraClient? _jiraClient;
+  final JiraOperationWrapper? _wrapper;
   
-  AnswerChecker(this.jira);
+  /// Creates AnswerChecker with direct JiraClient (legacy mode).
+  AnswerChecker(JiraClient jira)
+      : _jiraClient = jira,
+        _wrapper = null;
+  
+  /// Creates AnswerChecker with JiraOperationWrapper (supports MCP tools).
+  AnswerChecker.withWrapper(JiraOperationWrapper wrapper)
+      : _jiraClient = null,
+        _wrapper = wrapper;
+  
+  /// Get subtasks using available method.
+  Future<List<JiraTicket>> _getSubtasks(String ticketKey) async {
+    if (_wrapper != null) {
+      return await _wrapper!.getSubtasks(ticketKey);
+    } else {
+      return await _jiraClient!.getSubtasks(ticketKey);
+    }
+  }
+  
+  /// Get ticket using available method.
+  Future<JiraTicket> _getTicket(String ticketKey) async {
+    if (_wrapper != null) {
+      return await _wrapper!.getTicket(ticketKey);
+    } else {
+      return await _jiraClient!.getTicket(ticketKey);
+    }
+  }
   
   /// Check if all subtasks have been answered
   Future<TicketAnswerStatus> checkTicketAnswers(String ticketKey) async {
     // Get all subtasks
-    final subtasks = await jira.getSubtasks(ticketKey);
+    final subtasks = await _getSubtasks(ticketKey);
     
     if (subtasks.isEmpty) {
       return TicketAnswerStatus(
@@ -108,8 +136,18 @@ class AnswerChecker {
       );
     }
     
+    // Get full subtask details if needed
+    JiraTicket fullSubtask = subtask;
+    if (_wrapper != null || _jiraClient != null) {
+      try {
+        fullSubtask = await _getTicket(subtask.key);
+      } catch (e) {
+        // Use provided subtask if fetch fails
+      }
+    }
+    
     // Check for answers in Description field only (Decision: section) - like dmtools
-    final description = subtask.fields.description ?? '';
+    final description = fullSubtask.fields.description ?? '';
     final answers = <String>[];
     String? answeredBy;
     String? answeredAt;
@@ -130,10 +168,10 @@ class AnswerChecker {
             !decisionText.contains('---END---')) {
           answers.add(decisionText);
           // Mark as answered by assignee or reporter
-          answeredBy = subtask.fields.assignee?.displayName ?? 
-                       subtask.fields.reporter?.displayName ?? 
+          answeredBy = fullSubtask.fields.assignee?.displayName ?? 
+                       fullSubtask.fields.reporter?.displayName ?? 
                        'User';
-          answeredAt = subtask.fields.updated ?? subtask.fields.created;
+          answeredAt = fullSubtask.fields.updated ?? fullSubtask.fields.created;
         }
       }
     }

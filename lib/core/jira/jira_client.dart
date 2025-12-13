@@ -13,6 +13,7 @@ import 'models/jira_component.dart';
 import 'models/jira_fix_version.dart';
 import 'models/jira_issue_type.dart';
 import 'exceptions/jira_exception.dart';
+import '../../mcp/annotations.dart';
 
 /// Comprehensive Jira REST API client with full CRUD operations
 class JiraClient {
@@ -52,10 +53,18 @@ class JiraClient {
   // ====================
 
   /// Get ticket by key
-  /// Mirrors: jira_get_ticket
+  @McpTool(
+    name: 'jira_get_ticket',
+    description: 'Get ticket by key',
+    integration: 'jira',
+    category: 'ticket_management',
+  )
   Future<JiraTicket> getTicket(
+    @McpParam(name: 'key', description: 'The Jira ticket key', required: true, example: 'PROJ-123')
     String key, {
+    @McpParam(name: 'fields', description: 'Fields to return (comma-separated)', required: false)
     List<String>? fields,
+    @McpParam(name: 'expand', description: 'Fields to expand', required: false)
     String? expand,
   }) async {
     try {
@@ -80,12 +89,22 @@ class JiraClient {
   }
 
   /// Search tickets with JQL
-  /// Mirrors: jira_search_by_jql
+  @McpTool(
+    name: 'jira_search_by_jql',
+    description: 'Search tickets using JQL query',
+    integration: 'jira',
+    category: 'search',
+  )
   Future<JiraSearchResult> searchTickets(
+    @McpParam(name: 'jql', description: 'JQL query string', required: true, example: 'project = PROJ AND status = Open')
     String jql, {
+    @McpParam(name: 'startAt', description: 'Start index for pagination', required: false)
     int startAt = 0,
+    @McpParam(name: 'maxResults', description: 'Maximum number of results', required: false)
     int? maxResults,
+    @McpParam(name: 'fields', description: 'Fields to return', required: false)
     List<String>? fields,
+    @McpParam(name: 'expand', description: 'Fields to expand', required: false)
     String? expand,
   }) async {
     try {
@@ -122,10 +141,18 @@ class JiraClient {
   }
 
   /// Search all tickets (handles pagination automatically)
-  /// Mirrors: jira_search_by_jql with pagination
+  @McpTool(
+    name: 'jira_search_all_tickets',
+    description: 'Search all tickets with automatic pagination',
+    integration: 'jira',
+    category: 'search',
+  )
   Future<List<JiraTicket>> searchAllTickets(
+    @McpParam(name: 'jql', description: 'JQL query string', required: true, example: 'project = PROJ')
     String jql, {
+    @McpParam(name: 'fields', description: 'Fields to return', required: false)
     List<String>? fields,
+    @McpParam(name: 'expand', description: 'Fields to expand', required: false)
     String? expand,
   }) async {
     final allTickets = <JiraTicket>[];
@@ -153,17 +180,26 @@ class JiraClient {
   }
 
   /// Create ticket with basic fields
-  /// Mirrors: jira_create_ticket_basic
-  /// 
-  /// Description is automatically converted to ADF (Atlassian Document Format)
-  /// Supports plain text and basic markdown formatting
+  @McpTool(
+    name: 'jira_create_ticket_basic',
+    description: 'Create a new ticket with basic fields',
+    integration: 'jira',
+    category: 'ticket_management',
+  )
   Future<JiraTicket> createTicket({
+    @McpParam(name: 'project', description: 'Project key', required: true, example: 'PROJ')
     required String projectKey,
+    @McpParam(name: 'issueType', description: 'Issue type name', required: true, example: 'Task')
     required String issueType,
+    @McpParam(name: 'summary', description: 'Ticket summary/title', required: true)
     required String summary,
+    @McpParam(name: 'description', description: 'Ticket description', required: false)
     String? description,
+    @McpParam(name: 'parentKey', description: 'Parent ticket key for subtasks', required: false)
     String? parentKey,
+    @McpParam(name: 'customFields', description: 'Custom fields as JSON object', required: false)
     Map<String, dynamic>? customFields,
+    @McpParam(name: 'useMarkdown', description: 'Whether description is markdown', required: false)
     bool useMarkdown = false,
   }) async {
     try {
@@ -194,8 +230,16 @@ class JiraClient {
   }
 
   /// Create ticket with JSON configuration
-  /// Mirrors: jira_create_ticket_with_json
-  Future<JiraTicket> createTicketWithJson(Map<String, dynamic> fieldsJson) async {
+  @McpTool(
+    name: 'jira_create_ticket_with_json',
+    description: 'Create ticket with custom fields using JSON',
+    integration: 'jira',
+    category: 'ticket_management',
+  )
+  Future<JiraTicket> createTicketWithJson(
+    @McpParam(name: 'fieldsJson', description: 'Fields as JSON object', required: true)
+    Map<String, dynamic> fieldsJson
+  ) async {
     try {
       final response = await _dio.post(
         '/issue',
@@ -212,9 +256,16 @@ class JiraClient {
   }
 
   /// Update ticket
-  /// Mirrors: jira_update_ticket
+  @McpTool(
+    name: 'jira_update_ticket',
+    description: 'Update ticket fields',
+    integration: 'jira',
+    category: 'ticket_management',
+  )
   Future<void> updateTicket(
+    @McpParam(name: 'key', description: 'Ticket key', required: true, example: 'PROJ-123')
     String key,
+    @McpParam(name: 'updates', description: 'Fields to update as JSON object', required: true)
     Map<String, dynamic> updates,
   ) async {
     try {
@@ -229,10 +280,20 @@ class JiraClient {
   }
 
   /// Update ticket description
-  /// Mirrors: jira_update_description
-  /// 
-  /// Description is automatically converted to ADF format
-  Future<void> updateDescription(String key, String description, {bool useMarkdown = false}) async {
+  @McpTool(
+    name: 'jira_update_description',
+    description: 'Update ticket description',
+    integration: 'jira',
+    category: 'ticket_management',
+  )
+  Future<void> updateDescription(
+    @McpParam(name: 'key', description: 'Ticket key', required: true, example: 'PROJ-123')
+    String key,
+    @McpParam(name: 'description', description: 'New description', required: true)
+    String description, {
+    @McpParam(name: 'useMarkdown', description: 'Whether description is markdown', required: false)
+    bool useMarkdown = false,
+  }) async {
     final adfDescription = useMarkdown 
       ? markdownToAdf(description) 
       : textToAdf(description);
@@ -241,15 +302,35 @@ class JiraClient {
   }
 
   /// Update specific field
-  /// Mirrors: jira_update_field
-  Future<void> updateField(String key, String fieldName, dynamic value) async {
+  @McpTool(
+    name: 'jira_update_field',
+    description: 'Update a specific field on a ticket',
+    integration: 'jira',
+    category: 'ticket_management',
+  )
+  Future<void> updateField(
+    @McpParam(name: 'key', description: 'Ticket key', required: true, example: 'PROJ-123')
+    String key,
+    @McpParam(name: 'fieldName', description: 'Field name to update', required: true)
+    String fieldName,
+    @McpParam(name: 'value', description: 'Field value', required: true)
+    dynamic value
+  ) async {
     await updateTicket(key, {fieldName: value});
     _logger.info('✅ Updated field "$fieldName" for: $key');
   }
 
   /// Delete ticket
-  /// Mirrors: jira_delete_ticket
-  Future<void> deleteTicket(String key) async {
+  @McpTool(
+    name: 'jira_delete_ticket',
+    description: 'Delete a ticket by key',
+    integration: 'jira',
+    category: 'ticket_management',
+  )
+  Future<void> deleteTicket(
+    @McpParam(name: 'key', description: 'The Jira ticket key to delete', required: true, example: 'PROJ-123')
+    String key
+  ) async {
     try {
       await _dio.delete('/issue/$key');
       _logger.info('✅ Deleted ticket: $key');
@@ -263,8 +344,18 @@ class JiraClient {
   // ====================
 
   /// Assign ticket to user
-  /// Mirrors: jira_assign_ticket_to
-  Future<void> assignTicket(String key, String accountId) async {
+  @McpTool(
+    name: 'jira_assign_ticket_to',
+    description: 'Assign ticket to user by account ID',
+    integration: 'jira',
+    category: 'ticket_management',
+  )
+  Future<void> assignTicket(
+    @McpParam(name: 'key', description: 'Ticket key', required: true, example: 'PROJ-123')
+    String key,
+    @McpParam(name: 'accountId', description: 'User account ID', required: true)
+    String accountId
+  ) async {
     await updateTicket(key, {
       'assignee': {'accountId': accountId},
     });
@@ -272,8 +363,18 @@ class JiraClient {
   }
 
   /// Add label to ticket
-  /// Mirrors: jira_add_label
-  Future<void> addLabel(String key, String label) async {
+  @McpTool(
+    name: 'jira_add_label',
+    description: 'Add label to ticket',
+    integration: 'jira',
+    category: 'ticket_management',
+  )
+  Future<void> addLabel(
+    @McpParam(name: 'key', description: 'Ticket key', required: true, example: 'PROJ-123')
+    String key,
+    @McpParam(name: 'label', description: 'Label to add', required: true, example: 'urgent')
+    String label
+  ) async {
     try {
       await _dio.put(
         '/issue/$key',
@@ -292,8 +393,18 @@ class JiraClient {
   }
 
   /// Set priority
-  /// Mirrors: jira_set_priority
-  Future<void> setPriority(String key, String priorityName) async {
+  @McpTool(
+    name: 'jira_set_priority',
+    description: 'Set ticket priority',
+    integration: 'jira',
+    category: 'ticket_management',
+  )
+  Future<void> setPriority(
+    @McpParam(name: 'key', description: 'Ticket key', required: true, example: 'PROJ-123')
+    String key,
+    @McpParam(name: 'priority', description: 'Priority name', required: true, example: 'High')
+    String priorityName
+  ) async {
     await updateTicket(key, {
       'priority': {'name': priorityName},
     });
@@ -305,8 +416,16 @@ class JiraClient {
   // ====================
 
   /// Get subtasks for a ticket
-  /// Mirrors: jira_get_subtasks
-  Future<List<JiraTicket>> getSubtasks(String parentKey) async {
+  @McpTool(
+    name: 'jira_get_subtasks',
+    description: 'Get all subtasks of a parent ticket',
+    integration: 'jira',
+    category: 'subtasks',
+  )
+  Future<List<JiraTicket>> getSubtasks(
+    @McpParam(name: 'parentKey', description: 'Parent ticket key', required: true, example: 'PROJ-123')
+    String parentKey
+  ) async {
     final jql = 'parent = $parentKey AND '
         'issuetype in (Subtask, "Sub-task", "Sub task")';
     final result = await searchAllTickets(jql);
@@ -315,13 +434,20 @@ class JiraClient {
   }
 
   /// Create subtask
-  /// Mirrors: jira_create_ticket_with_parent
-  /// 
-  /// Description is automatically converted to ADF format
+  @McpTool(
+    name: 'jira_create_subtask',
+    description: 'Create a subtask for a parent ticket',
+    integration: 'jira',
+    category: 'subtasks',
+  )
   Future<JiraTicket> createSubtask({
+    @McpParam(name: 'parentKey', description: 'Parent ticket key', required: true, example: 'PROJ-123')
     required String parentKey,
+    @McpParam(name: 'summary', description: 'Subtask summary', required: true)
     required String summary,
+    @McpParam(name: 'description', description: 'Subtask description', required: false)
     String? description,
+    @McpParam(name: 'useMarkdown', description: 'Whether description is markdown', required: false)
     bool useMarkdown = false,
   }) async {
     final parent = await getTicket(parentKey, fields: ['project']);
@@ -346,8 +472,16 @@ class JiraClient {
   // ====================
 
   /// Get all comments for a ticket
-  /// Mirrors: jira_get_comments
-  Future<List<JiraComment>> getComments(String key) async {
+  @McpTool(
+    name: 'jira_get_comments',
+    description: 'Get all comments for a ticket',
+    integration: 'jira',
+    category: 'comments',
+  )
+  Future<List<JiraComment>> getComments(
+    @McpParam(name: 'key', description: 'Ticket key', required: true, example: 'PROJ-123')
+    String key
+  ) async {
     try {
       final response = await _dio.get('/issue/$key/comment');
       final data = response.data as Map<String, dynamic>;
@@ -362,10 +496,20 @@ class JiraClient {
   }
 
   /// Post comment to ticket
-  /// Mirrors: jira_post_comment
-  /// 
-  /// Body is automatically converted to ADF format
-  Future<JiraComment> postComment(String key, String body, {bool useMarkdown = false}) async {
+  @McpTool(
+    name: 'jira_post_comment',
+    description: 'Add a comment to a ticket',
+    integration: 'jira',
+    category: 'comments',
+  )
+  Future<JiraComment> postComment(
+    @McpParam(name: 'key', description: 'Ticket key', required: true, example: 'PROJ-123')
+    String key,
+    @McpParam(name: 'comment', description: 'Comment body', required: true)
+    String body, {
+    @McpParam(name: 'useMarkdown', description: 'Whether comment is markdown', required: false)
+    bool useMarkdown = false,
+  }) async {
     try {
       final adfBody = useMarkdown ? markdownToAdf(body) : textToAdf(body);
       
@@ -381,8 +525,18 @@ class JiraClient {
   }
 
   /// Post comment only if it doesn't exist
-  /// Mirrors: jira_post_comment_if_not_exists
-  Future<void> postCommentIfNotExists(String key, String body) async {
+  @McpTool(
+    name: 'jira_post_comment_if_not_exists',
+    description: 'Post comment only if it does not already exist',
+    integration: 'jira',
+    category: 'comments',
+  )
+  Future<void> postCommentIfNotExists(
+    @McpParam(name: 'key', description: 'Ticket key', required: true, example: 'PROJ-123')
+    String key,
+    @McpParam(name: 'comment', description: 'Comment body', required: true)
+    String body
+  ) async {
     final comments = await getComments(key);
     
     final exists = comments.any((comment) => 
@@ -401,8 +555,16 @@ class JiraClient {
   // ====================
 
   /// Get available transitions for a ticket
-  /// Mirrors: jira_get_transitions
-  Future<List<JiraTransition>> getTransitions(String key) async {
+  @McpTool(
+    name: 'jira_get_transitions',
+    description: 'Get all available transitions for a ticket',
+    integration: 'jira',
+    category: 'workflow',
+  )
+  Future<List<JiraTransition>> getTransitions(
+    @McpParam(name: 'key', description: 'Ticket key', required: true, example: 'PROJ-123')
+    String key
+  ) async {
     try {
       final response = await _dio.get('/issue/$key/transitions');
       final data = response.data as Map<String, dynamic>;
@@ -417,8 +579,18 @@ class JiraClient {
   }
 
   /// Move ticket to status (transition)
-  /// Mirrors: jira_move_to_status
-  Future<void> moveToStatus(String key, String statusName) async {
+  @McpTool(
+    name: 'jira_move_to_status',
+    description: 'Move ticket to a specific status',
+    integration: 'jira',
+    category: 'workflow',
+  )
+  Future<void> moveToStatus(
+    @McpParam(name: 'key', description: 'Ticket key', required: true, example: 'PROJ-123')
+    String key,
+    @McpParam(name: 'statusName', description: 'Target status name', required: true, example: 'In Progress')
+    String statusName
+  ) async {
     final transitions = await getTransitions(key);
     
     final transition = transitions.firstWhere(
@@ -443,10 +615,18 @@ class JiraClient {
   }
 
   /// Move ticket to status with resolution
-  /// Mirrors: jira_move_to_status_with_resolution
+  @McpTool(
+    name: 'jira_move_to_status_with_resolution',
+    description: 'Move ticket to status and set resolution',
+    integration: 'jira',
+    category: 'workflow',
+  )
   Future<void> moveToStatusWithResolution(
+    @McpParam(name: 'key', description: 'Ticket key', required: true, example: 'PROJ-123')
     String key,
+    @McpParam(name: 'statusName', description: 'Target status name', required: true, example: 'Done')
     String statusName,
+    @McpParam(name: 'resolution', description: 'Resolution name', required: true, example: 'Fixed')
     String resolutionName,
   ) async {
     final transitions = await getTransitions(key);
@@ -479,8 +659,16 @@ class JiraClient {
   // ====================
 
   /// Get fix versions for a project
-  /// Mirrors: jira_get_fix_versions
-  Future<List<JiraFixVersion>> getFixVersions(String projectKey) async {
+  @McpTool(
+    name: 'jira_get_fix_versions',
+    description: 'Get all fix versions for a project',
+    integration: 'jira',
+    category: 'project_metadata',
+  )
+  Future<List<JiraFixVersion>> getFixVersions(
+    @McpParam(name: 'project', description: 'Project key', required: true, example: 'PROJ')
+    String projectKey
+  ) async {
     try {
       final response = await _dio.get('/project/$projectKey/versions');
       final versions = (response.data as List)
@@ -494,8 +682,18 @@ class JiraClient {
   }
 
   /// Set fix version
-  /// Mirrors: jira_set_fix_version
-  Future<void> setFixVersion(String key, String versionName) async {
+  @McpTool(
+    name: 'jira_set_fix_version',
+    description: 'Set fix version (replaces existing)',
+    integration: 'jira',
+    category: 'project_metadata',
+  )
+  Future<void> setFixVersion(
+    @McpParam(name: 'key', description: 'Ticket key', required: true, example: 'PROJ-123')
+    String key,
+    @McpParam(name: 'fixVersion', description: 'Fix version name', required: true, example: '1.0.0')
+    String versionName
+  ) async {
     await updateTicket(key, {
       'fixVersions': [
         {'name': versionName},
@@ -505,8 +703,18 @@ class JiraClient {
   }
 
   /// Add fix version (without removing existing)
-  /// Mirrors: jira_add_fix_version
-  Future<void> addFixVersion(String key, String versionName) async {
+  @McpTool(
+    name: 'jira_add_fix_version',
+    description: 'Add fix version without removing existing ones',
+    integration: 'jira',
+    category: 'project_metadata',
+  )
+  Future<void> addFixVersion(
+    @McpParam(name: 'key', description: 'Ticket key', required: true, example: 'PROJ-123')
+    String key,
+    @McpParam(name: 'fixVersion', description: 'Fix version name', required: true, example: '1.1.0')
+    String versionName
+  ) async {
     final ticket = await getTicket(key, fields: ['fixVersions']);
     final existingVersions = ticket.fields.fixVersions ?? [];
     
@@ -520,8 +728,18 @@ class JiraClient {
   }
 
   /// Remove fix version
-  /// Mirrors: jira_remove_fix_version
-  Future<void> removeFixVersion(String key, String versionName) async {
+  @McpTool(
+    name: 'jira_remove_fix_version',
+    description: 'Remove a fix version from ticket',
+    integration: 'jira',
+    category: 'project_metadata',
+  )
+  Future<void> removeFixVersion(
+    @McpParam(name: 'key', description: 'Ticket key', required: true, example: 'PROJ-123')
+    String key,
+    @McpParam(name: 'fixVersion', description: 'Fix version name to remove', required: true, example: '1.0.0')
+    String versionName
+  ) async {
     final ticket = await getTicket(key, fields: ['fixVersions']);
     final existingVersions = ticket.fields.fixVersions ?? [];
     
@@ -539,8 +757,16 @@ class JiraClient {
   // ====================
 
   /// Get components for a project
-  /// Mirrors: jira_get_components
-  Future<List<JiraComponent>> getComponents(String projectKey) async {
+  @McpTool(
+    name: 'jira_get_components',
+    description: 'Get all components for a project',
+    integration: 'jira',
+    category: 'project_metadata',
+  )
+  Future<List<JiraComponent>> getComponents(
+    @McpParam(name: 'project', description: 'Project key', required: true, example: 'PROJ')
+    String projectKey
+  ) async {
     try {
       final response = await _dio.get('/project/$projectKey/components');
       final components = (response.data as List)
@@ -554,8 +780,16 @@ class JiraClient {
   }
 
   /// Get issue types for a project
-  /// Mirrors: jira_get_issue_types
-  Future<List<JiraIssueType>> getIssueTypes(String projectKey) async {
+  @McpTool(
+    name: 'jira_get_issue_types',
+    description: 'Get all issue types for a project',
+    integration: 'jira',
+    category: 'project_metadata',
+  )
+  Future<List<JiraIssueType>> getIssueTypes(
+    @McpParam(name: 'project', description: 'Project key', required: true, example: 'PROJ')
+    String projectKey
+  ) async {
     try {
       final response = await _dio.get('/project/$projectKey/statuses');
       final types = <JiraIssueType>[];
@@ -579,7 +813,12 @@ class JiraClient {
   // ====================
 
   /// Get my profile
-  /// Mirrors: jira_get_my_profile
+  @McpTool(
+    name: 'jira_get_my_profile',
+    description: 'Get current user profile',
+    integration: 'jira',
+    category: 'user_management',
+  )
   Future<JiraUser> getMyProfile() async {
     try {
       final response = await _dio.get('/myself');
@@ -590,8 +829,16 @@ class JiraClient {
   }
 
   /// Get user by account ID
-  /// Mirrors: jira_get_user_profile
-  Future<JiraUser> getUserProfile(String accountId) async {
+  @McpTool(
+    name: 'jira_get_user_profile',
+    description: 'Get user profile by account ID',
+    integration: 'jira',
+    category: 'user_management',
+  )
+  Future<JiraUser> getUserProfile(
+    @McpParam(name: 'accountId', description: 'User account ID', required: true)
+    String accountId
+  ) async {
     try {
       final response = await _dio.get(
         '/user',
@@ -604,8 +851,16 @@ class JiraClient {
   }
 
   /// Get account by email
-  /// Mirrors: jira_get_account_by_email
-  Future<JiraUser?> getAccountByEmail(String email) async {
+  @McpTool(
+    name: 'jira_get_account_by_email',
+    description: 'Get account details by email',
+    integration: 'jira',
+    category: 'user_management',
+  )
+  Future<JiraUser?> getAccountByEmail(
+    @McpParam(name: 'email', description: 'User email address', required: true, example: 'user@example.com')
+    String email
+  ) async {
     try {
       final response = await _dio.get(
         '/user/search',

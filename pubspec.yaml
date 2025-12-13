@@ -29,10 +29,17 @@ dependencies:
   # Utilities
   path: ^1.8.3
   intl: ^0.19.0
+  
+  # MCP Protocol
+  mcp_dart: ^1.0.2
 
 dev_dependencies:
   build_runner: ^2.4.6
   json_serializable: ^6.7.1
+  source_gen: ^1.5.0
+  analyzer: ^6.0.0
+  build: ^2.4.0
+  glob: ^2.1.0
   test: ^1.24.9
   lints: ^3.0.0
 

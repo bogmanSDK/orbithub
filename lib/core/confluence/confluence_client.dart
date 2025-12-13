@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'confluence_config.dart';
+import '../../mcp/annotations.dart';
 
 /// Client for Confluence REST API
 /// 
@@ -22,12 +23,16 @@ class ConfluenceClient {
         ),);
 
   /// Get content of a Confluence page by ID
-  /// 
-  /// Example:
-  /// ```dart
-  /// final content = await confluence.getContent('12345678');
-  /// ```
-  Future<String> getContent(String pageId) async {
+  @McpTool(
+    name: 'confluence_content_by_id',
+    description: 'Get page content by ID',
+    integration: 'confluence',
+    category: 'content',
+  )
+  Future<String> getContent(
+    @McpParam(name: 'contentId', description: 'Confluence page ID', required: true, example: '12345678')
+    String pageId
+  ) async {
     try {
       final response = await _dio.get(
         '/rest/api/content/$pageId',
@@ -80,13 +85,16 @@ class ConfluenceClient {
   }
 
   /// Get content by URL
-  /// 
-  /// Parses Confluence URL and extracts page ID
-  /// 
-  /// Example URL formats:
-  /// - https://domain.atlassian.net/wiki/spaces/SPACE/pages/12345678/Page+Title
-  /// - https://domain.atlassian.net/wiki/spaces/SPACE/pages/12345678
-  Future<String> getContentByUrl(String url) async {
+  @McpTool(
+    name: 'confluence_content_by_url',
+    description: 'Get page content by URL',
+    integration: 'confluence',
+    category: 'content',
+  )
+  Future<String> getContentByUrl(
+    @McpParam(name: 'url', description: 'Confluence page URL', required: true)
+    String url
+  ) async {
     final pageId = _extractPageIdFromUrl(url);
     if (pageId == null) {
       throw ConfluenceException(
@@ -105,8 +113,16 @@ class ConfluenceClient {
   }
 
   /// Get plain text content (strips HTML tags)
-  /// Also handles URLs (extracts page ID automatically)
-  Future<String> getPlainTextContent(String pageIdOrUrl) async {
+  @McpTool(
+    name: 'confluence_plain_text_content',
+    description: 'Get plain text content from page (strips HTML)',
+    integration: 'confluence',
+    category: 'content',
+  )
+  Future<String> getPlainTextContent(
+    @McpParam(name: 'pageIdOrUrl', description: 'Page ID or URL', required: true)
+    String pageIdOrUrl
+  ) async {
     String pageId;
     
     // Check if it's a URL or just an ID
