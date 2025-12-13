@@ -23,6 +23,12 @@ void main(List<String> args) async {
   print('🤖 OrbitHub AI Teammate\n');
   print('=' * 60);
   
+  // Check if comments should be disabled
+  final disableComments = Platform.environment['DISABLE_JIRA_COMMENTS'] == 'true';
+  if (disableComments) {
+    print('⚠️  Jira comments are disabled (DISABLE_JIRA_COMMENTS=true)\n');
+  }
+  
   // Parse arguments
   if (args.isEmpty) {
     print('❌ Error: Missing ticket key');
@@ -92,9 +98,10 @@ void main(List<String> args) async {
         if (questions.isEmpty) {
           print('   ✅ Requirements are CLEAR - no questions needed!');
           
-          // Post comment
-          print('\n💬 Step 4: Posting comment...');
-          final clearComment = '''
+          // Post comment (if not disabled)
+          if (!disableComments) {
+            print('\n💬 Step 4: Posting comment...');
+            final clearComment = '''
 🎉 **AI Analysis Complete**
 
 I've analyzed this ticket and the requirements are **clear and well-defined**.
@@ -109,9 +116,12 @@ Moving this ticket to "In Progress" and beginning work immediately.
 
 _No clarification questions needed!_ 🚀
 ''';
-          
-          await wrapper.postComment(ticketKey, clearComment, useMarkdown: true);
-          print('   ✅ Comment posted');
+            
+            await wrapper.postComment(ticketKey, clearComment, useMarkdown: true);
+            print('   ✅ Comment posted');
+          } else {
+            print('\n💬 Step 4: Skipping comment (disabled)');
+          }
           
           // Move to In Progress
           print('\n🔄 Step 5: Moving to "In Progress"...');
@@ -187,9 +197,10 @@ _No clarification questions needed!_ 🚀
           exit(1);
         }
         
-        // Post comment
-        print('\n💬 Step 5: Posting comment...');
-        final comment = '''
+        // Post comment (if not disabled)
+        if (!disableComments) {
+          print('\n💬 Step 5: Posting comment...');
+          final comment = '''
 🤖 **AI Teammate Analysis**
 
 I've analyzed this ticket and have ${questions.length} clarifying question(s):
@@ -203,9 +214,12 @@ Please answer these questions so I can proceed with implementation.
 2. When ready, assign ticket back to me (AI Agent)
 3. Move status to "To Do"
 ''';
-        
-        await wrapper.postComment(ticketKey, comment, useMarkdown: true);
-        print('   ✅ Comment posted');
+          
+          await wrapper.postComment(ticketKey, comment, useMarkdown: true);
+          print('   ✅ Comment posted');
+        } else {
+          print('\n💬 Step 5: Skipping comment (disabled)');
+        }
         
         // Reassign to reporter
         print('\n👤 Step 6: Reassigning ticket...');
@@ -293,9 +307,11 @@ Please answer these questions so I can proceed with implementation.
     if (!answerStatus.allAnswered) {
       print('   ⏳ Not all questions answered yet');
       print('   📊 ${answerStatus.totalQuestions - answerStatus.answeredQuestions} question(s) still pending');
-      print('\n💬 Posting status comment...');
-      
-      final statusComment = '''
+      // Post status comment (if not disabled)
+      if (!disableComments) {
+        print('\n💬 Posting status comment...');
+        
+        final statusComment = '''
 🤖 **AI Teammate Status Update**
 
 **Progress**: ${answerStatus.answeredQuestions}/${answerStatus.totalQuestions} questions answered
@@ -308,9 +324,12 @@ ${answerStatus.allAnswered
   ? '✅ **All questions answered!** Ready to proceed with implementation.' 
   : '⏳ **Waiting for answers** to remaining questions.'}
 ''';
-      
-      await wrapper.postComment(ticketKey, statusComment, useMarkdown: true);
-      print('   ✅ Status comment posted');
+        
+        await wrapper.postComment(ticketKey, statusComment, useMarkdown: true);
+        print('   ✅ Status comment posted');
+      } else {
+        print('\n💬 Skipping status comment (disabled)');
+      }
       
       print('\n⏸️  Workflow paused - waiting for all answers');
       print('   💡 Once all questions are answered:');
@@ -381,10 +400,11 @@ ${answerStatus.allAnswered
       print('   💡 Continuing without AC generation');
     }
     
-    // Step 8: Post completion comment
-    print('\n💬 Step 8: Posting completion comment...');
-    
-    final completionComment = '''
+    // Step 8: Post completion comment (if not disabled)
+    if (!disableComments) {
+      print('\n💬 Step 8: Posting completion comment...');
+      
+      final completionComment = '''
 🎉 **All Questions Answered!**
 
 Thank you for providing answers to all questions!
@@ -408,9 +428,12 @@ ${acceptanceCriteria != null ? '\n## Generated Acceptance Criteria:\n\n$acceptan
 
 _AI-powered implementation coming soon!_ 🤖
 ''';
-    
-    await wrapper.postComment(ticketKey, completionComment, useMarkdown: true);
-    print('   ✅ Completion comment posted');
+      
+      await wrapper.postComment(ticketKey, completionComment, useMarkdown: true);
+      print('   ✅ Completion comment posted');
+    } else {
+      print('\n💬 Step 8: Skipping completion comment (disabled)');
+    }
     
     // Step 9: Move to In Progress
     print('\n🔄 Step 9: Updating ticket status...');

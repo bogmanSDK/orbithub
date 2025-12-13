@@ -77,6 +77,7 @@ jobs:
           JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
           AI_PROVIDER: ${{ secrets.AI_PROVIDER }}
           AI_API_KEY: ${{ secrets.AI_API_KEY }}
+          DISABLE_JIRA_COMMENTS: 'true'
         run: |
           # Get ticket key from either manual trigger or webhook
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
