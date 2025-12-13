@@ -29,8 +29,12 @@ jobs:
       - name: 📚 Install dependencies
         run: dart pub get
       
-      - name: 🔨 Generate MCP tool files
-        run: dart run tool/generate_mcp_files.dart
+      - name: 🔨 Generate code (JSON serialization + MCP tools)
+        run: |
+          # Generate JSON serialization files
+          dart run build_runner build --delete-conflicting-outputs
+          # Generate MCP tool files
+          dart run tool/generate_mcp_files.dart
       
       - name: 🔧 Setup environment
         env:
