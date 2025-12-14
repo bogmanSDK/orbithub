@@ -1,12 +1,48 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:config_ui/screens/home_screen.dart';
+import 'package:config_ui/providers/theme_provider.dart';
+import 'package:config_ui/services/config_service.dart';
 
-void main() {
-  runApp(const MyApp());
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  // Load saved theme preference
+  final configService = ConfigService();
+  final config = await configService.loadConfig();
+  final initialTheme = config.theme ?? 'dark';
+  
+  runApp(MyApp(initialTheme: initialTheme));
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  final String initialTheme;
+  
+  const MyApp({super.key, required this.initialTheme});
+
+  @override
+  Widget build(BuildContext context) {
+    return ChangeNotifierProvider(
+      create: (_) => ThemeProvider(initialTheme: initialTheme),
+      child: Consumer<ThemeProvider>(
+        builder: (context, themeProvider, _) {
+          return MaterialApp(
+            title: 'OrbitHub Configuration',
+            theme: ThemeProvider.getLightTheme(),
+            darkTheme: ThemeProvider.getDarkTheme(),
+            themeMode: themeProvider.themeMode,
+            home: const HomeScreen(),
+            debugShowCheckedModeBanner: false,
+          );
+        },
+      ),
+    );
+  }
+}
+
+// Legacy theme configuration kept for reference
+class _LegacyThemeConfig extends StatelessWidget {
+  const _LegacyThemeConfig();
 
   @override
   Widget build(BuildContext context) {
@@ -150,3 +186,5 @@ class MyApp extends StatelessWidget {
     );
   }
 }
+
+// End of legacy configuration
