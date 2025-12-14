@@ -1,0 +1,124 @@
+name: Build CLI
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+    outputs:
+      artifact_name:
+        description: 'Name of the uploaded artifact'
+        value: cli-binaries
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        include:
+          - os: ubuntu-latest
+            platform: linux-amd64
+            binary_name: orbithub-linux-amd64
+          - os: macos-latest
+            platform: darwin-amd64
+            binary_name: orbithub-darwin-amd64
+          - os: windows-latest
+            platform: windows-amd64
+            binary_name: orbithub-windows-amd64.exe
+    
+    runs-on: ${{ matrix.os }}
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+      
+      - name: 📦 Setup Dart
+        uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+      
+      - name: 📚 Install dependencies
+        run: dart pub get
+      
+      - name: 🔨 Generate code (JSON serialization + MCP tools)
+        run: |
+          # Generate JSON serialization files
+          dart run build_runner build --delete-conflicting-outputs
+          # Generate MCP tool files
+          dart run tool/generate_mcp_files.dart
+      
+      - name: 🔨 Compile binary
+        run: |
+          echo "Compiling OrbitHub binary for ${{ matrix.platform }}..."
+          
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            dart compile exe bin/orbit.dart -o ${{ matrix.binary_name }}
+          else
+            dart compile exe bin/orbit.dart -o ${{ matrix.binary_name }}
+          fi
+          
+          # Verify binary was created
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            if [ ! -f "${{ matrix.binary_name }}" ]; then
+              echo "Error: Binary not created"
+              exit 1
+            fi
+          else
+            if [ ! -f "${{ matrix.binary_name }}" ]; then
+              echo "Error: Binary not created"
+              exit 1
+            fi
+            chmod +x "${{ matrix.binary_name }}"
+          fi
+          
+          echo "Binary created: ${{ matrix.binary_name }}"
+          ls -lh "${{ matrix.binary_name }}" || dir "${{ matrix.binary_name }}"
+      
+      - name: 📦 Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: binary-${{ matrix.platform }}
+          path: ${{ matrix.binary_name }}
+          retention-days: 7
+
+  prepare-release:
+    needs: build
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Download all binaries
+        uses: actions/download-artifact@v4
+        with:
+          path: binaries/
+      
+      - name: 📝 Copy install script
+        run: |
+          cp install.sh binaries/
+          chmod +x binaries/install.sh
+      
+      - name: 📦 Prepare release package
+        run: |
+          echo "Prepared binaries:"
+          ls -lh binaries/ || dir binaries/
+          
+          # Create checksums
+          cd binaries
+          for file in orbithub-*; do
+            if [ -f "$file" ]; then
+              if command -v sha256sum >/dev/null 2>&1; then
+                sha256sum "$file" > "${file}.sha256"
+              elif command -v shasum >/dev/null 2>&1; then
+                shasum -a 256 "$file" > "${file}.sha256"
+              fi
+            fi
+          done
+          cd ..
+      
+      - name: 📤 Upload release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: cli-binaries
+          path: binaries/
+          retention-days: 7
+

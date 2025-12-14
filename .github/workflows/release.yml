@@ -1,0 +1,102 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g., v1.0.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+      
+      - name: 🔍 Determine version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/}"
+          fi
+          
+          # Remove 'v' prefix if present
+          VERSION="${VERSION#v}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=v$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
+          echo "Tag: v$VERSION"
+      
+      - name: 🔨 Build CLI binaries
+        id: build
+        uses: ./.github/workflows/build-cli.yml
+        with:
+          version: ${{ steps.version.outputs.tag }}
+      
+      - name: 📥 Download binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: cli-binaries
+          path: release/
+      
+      - name: 📝 Create release notes
+        run: |
+          cat > release/RELEASE_NOTES.md << EOF
+          # OrbitHub ${{ steps.version.outputs.tag }}
+          
+          ## Installation
+          
+          \`\`\`bash
+          curl -fsSL https://github.com/bogmanSDK/orbithub/releases/download/${{ steps.version.outputs.tag }}/install.sh | bash
+          \`\`\`
+          
+          ## What's New
+          
+          - Pre-built binaries for Linux, macOS, and Windows
+          - No source code access required
+          - Always up-to-date via GitHub Releases
+          
+          ## Supported Platforms
+          
+          - Linux (amd64)
+          - macOS (amd64)
+          - Windows (amd64)
+          
+          ## Files
+          
+          - \`install.sh\` - Installation script
+          - \`orbithub-linux-amd64\` - Linux binary
+          - \`orbithub-darwin-amd64\` - macOS binary
+          - \`orbithub-windows-amd64.exe\` - Windows binary
+          EOF
+      
+      - name: 🚀 Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: OrbitHub ${{ steps.version.outputs.tag }}
+          body_path: release/RELEASE_NOTES.md
+          files: |
+            release/install.sh
+            release/orbithub-linux-amd64
+            release/orbithub-darwin-amd64
+            release/orbithub-windows-amd64.exe
+            release/orbithub-linux-amd64.sha256
+            release/orbithub-darwin-amd64.sha256
+            release/orbithub-windows-amd64.exe.sha256
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
