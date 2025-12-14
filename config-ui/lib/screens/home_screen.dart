@@ -123,8 +123,8 @@ class _HomeScreenState extends State<HomeScreen> {
             indicatorColor: const Color(0xFF2196F3), // Blue indicator
             tabs: const [
               Tab(icon: Icon(Icons.bug_report), text: 'Jira'),
-              Tab(icon: Icon(Icons.psychology), text: 'AI'),
               Tab(icon: Icon(Icons.settings), text: 'Advanced'),
+              Tab(icon: Icon(Icons.psychology), text: 'AI'),
             ],
           ),
         ),
@@ -137,11 +137,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     config: _config,
                     onConfigChanged: _onConfigChanged,
                   ),
-                  AIConfigScreen(
+                  AdvancedConfigScreen(
                     config: _config,
                     onConfigChanged: _onConfigChanged,
                   ),
-                  AdvancedConfigScreen(
+                  AIConfigScreen(
                     config: _config,
                     onConfigChanged: _onConfigChanged,
                   ),
