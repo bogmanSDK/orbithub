@@ -132,8 +132,9 @@ jobs:
           done
           
           # Create tarballs for asset directories
+          # Include full directory structure (lib/prompts and agents)
           if [ -d "lib/prompts" ] && [ "$(ls -A lib/prompts)" ]; then
-            tar -czf lib-prompts.tar.gz -C lib prompts
+            tar -czf lib-prompts.tar.gz -C . lib/prompts
             echo "Created lib-prompts.tar.gz"
           fi
           

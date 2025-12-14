@@ -193,25 +193,36 @@ download_orbithub() {
     local prompts_url="https://github.com/${REPO}/releases/download/${version}/lib-prompts.tar.gz"
     local prompts_tmp=$(mktemp)
     
-    if curl -sL --fail "$prompts_url" -o "$prompts_tmp" 2>/dev/null; then
-        tar -xzf "$prompts_tmp" -C "$INSTALL_DIR" 2>/dev/null || true
+    if curl -sL --fail "$prompts_url" -o "$prompts_tmp"; then
+        tar -xzf "$prompts_tmp" -C "$INSTALL_DIR" || error "Failed to extract prompts directory"
         rm -f "$prompts_tmp"
         info "Downloaded prompts directory"
     else
-        warn "Could not download prompts directory (optional, may use defaults)"
+        error "Failed to download prompts directory from $prompts_url"
     fi
     
     # Download agents directory files
     local agents_url="https://github.com/${REPO}/releases/download/${version}/agents.tar.gz"
     local agents_tmp=$(mktemp)
     
-    if curl -sL --fail "$agents_url" -o "$agents_tmp" 2>/dev/null; then
-        tar -xzf "$agents_tmp" -C "$INSTALL_DIR" 2>/dev/null || true
+    if curl -sL --fail "$agents_url" -o "$agents_tmp"; then
+        tar -xzf "$agents_tmp" -C "$INSTALL_DIR" || error "Failed to extract agents directory"
         rm -f "$agents_tmp"
         info "Downloaded agents directory"
     else
-        warn "Could not download agents directory (optional, may use defaults)"
+        error "Failed to download agents directory from $agents_url"
     fi
+    
+    # Verify assets were installed correctly
+    if [ ! -d "$INSTALL_DIR/lib/prompts" ] || [ -z "$(ls -A $INSTALL_DIR/lib/prompts 2>/dev/null)" ]; then
+        error "Prompts directory not found or empty at $INSTALL_DIR/lib/prompts"
+    fi
+    
+    if [ ! -d "$INSTALL_DIR/agents" ] || [ -z "$(ls -A $INSTALL_DIR/agents 2>/dev/null)" ]; then
+        error "Agents directory not found or empty at $INSTALL_DIR/agents"
+    fi
+    
+    info "Asset directories verified successfully"
 }
 
 # Update shell configuration
