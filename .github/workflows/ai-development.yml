@@ -153,15 +153,27 @@ jobs:
           
           # Run git operations from project root
           cd "$GITHUB_WORKSPACE"
+          
+          # Capture both stdout and stderr
+          set +e  # Don't exit on error
           OUTPUT=$(orbithub git-operations --ticket-key "$TICKET_KEY" 2>&1)
+          EXIT_CODE=$?
+          set -e
+          
           echo "$OUTPUT"
           
-          # Extract branch name from output (look for "Branch: feature/AIH-1" pattern)
-          BRANCH_NAME=$(echo "$OUTPUT" | grep -oP 'Branch: \K[^\s]+' | tail -1)
+          if [ $EXIT_CODE -ne 0 ]; then
+            echo "❌ Git operations failed with exit code: $EXIT_CODE"
+            exit $EXIT_CODE
+          fi
+          
+          # Extract branch name from output (look for "BRANCH_NAME=..." pattern)
+          BRANCH_NAME=$(echo "$OUTPUT" | grep -oP 'BRANCH_NAME=\K[^\s]+' | tail -1)
           
           if [ -z "$BRANCH_NAME" ]; then
             # Fallback: get current branch
             BRANCH_NAME=$(git branch --show-current)
+            echo "⚠️  Could not parse branch name from output, using current branch: $BRANCH_NAME"
           fi
           
           echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT

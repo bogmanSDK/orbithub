@@ -454,11 +454,13 @@ Future<void> _runGitOperations(String ticketKey) async {
     
     if (!result.success) {
       print('❌ Git operations failed: ${result.error}');
+      print('BRANCH_NAME=$branchName');  // Still output branch name for workflow
       exit(1);
     }
     
     print('\n✅ Git operations completed successfully');
-    print('   Branch: ${result.branchName}');
+    print('Branch: ${result.branchName}');
+    print('BRANCH_NAME=${result.branchName}');  // Machine-readable format for workflow
     exit(0);
   } catch (e, stackTrace) {
     print('\n❌ ERROR: $e');

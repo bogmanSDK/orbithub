@@ -101,6 +101,23 @@ class GitHelper {
     String commitMessage,
   ) async {
     try {
+      // Check if branch already exists locally and delete it
+      _logger.info('Checking for existing local branch: $branchName');
+      final branchCheckResult = await Process.run(
+        'git',
+        ['branch', '--list', branchName],
+        runInShell: true,
+      );
+      
+      if (branchCheckResult.stdout.toString().trim().isNotEmpty) {
+        _logger.info('Local branch exists, deleting it first...');
+        await Process.run(
+          'git',
+          ['branch', '-D', branchName],
+          runInShell: true,
+        );
+      }
+      
       // Create and checkout new branch
       _logger.info('Creating branch: $branchName');
       final checkoutResult = await Process.run(
@@ -110,9 +127,12 @@ class GitHelper {
       );
       
       if (checkoutResult.exitCode != 0) {
+        final errorMsg = 'Failed to create branch: ${checkoutResult.stderr}\nStdout: ${checkoutResult.stdout}';
+        _logger.severe(errorMsg);
+        print('ERROR: $errorMsg');
         return GitOperationResult(
           success: false,
-          error: 'Failed to create branch: ${checkoutResult.stderr}',
+          error: errorMsg,
         );
       }
       
@@ -125,9 +145,12 @@ class GitHelper {
       );
       
       if (addResult.exitCode != 0) {
+        final errorMsg = 'Failed to stage changes: ${addResult.stderr}\nStdout: ${addResult.stdout}';
+        _logger.severe(errorMsg);
+        print('ERROR: $errorMsg');
         return GitOperationResult(
           success: false,
-          error: 'Failed to stage changes: ${addResult.stderr}',
+          error: errorMsg,
         );
       }
       
@@ -139,12 +162,19 @@ class GitHelper {
       );
       
       if (statusResult.stdout.toString().trim().isEmpty) {
-        _logger.warning('No changes to commit');
+        final errorMsg = 'No changes were made by the development process';
+        _logger.warning(errorMsg);
+        print('WARNING: $errorMsg');
         return GitOperationResult(
           success: false,
-          error: 'No changes were made by the development process',
+          error: errorMsg,
         );
       }
+      
+      // Show what files changed
+      _logger.info('Files to commit:');
+      print('Files to commit:');
+      print(statusResult.stdout);
       
       // Commit changes
       _logger.info('Committing changes...');
@@ -155,26 +185,37 @@ class GitHelper {
       );
       
       if (commitResult.exitCode != 0) {
+        final errorMsg = 'Failed to commit: ${commitResult.stderr}\nStdout: ${commitResult.stdout}';
+        _logger.severe(errorMsg);
+        print('ERROR: $errorMsg');
         return GitOperationResult(
           success: false,
-          error: 'Failed to commit: ${commitResult.stderr}',
+          error: errorMsg,
         );
       }
       
-      // Push to remote
+      print('Commit stdout: ${commitResult.stdout}');
+      
+      // Push to remote (with force to overwrite if branch exists remotely)
       _logger.info('Pushing to remote...');
       final pushResult = await Process.run(
         'git',
-        ['push', '-u', 'origin', branchName],
+        ['push', '-u', 'origin', branchName, '--force'],
         runInShell: true,
       );
       
       if (pushResult.exitCode != 0) {
+        final errorMsg = 'Failed to push: ${pushResult.stderr}\nStdout: ${pushResult.stdout}';
+        _logger.severe(errorMsg);
+        print('ERROR: $errorMsg');
         return GitOperationResult(
           success: false,
-          error: 'Failed to push: ${pushResult.stderr}',
+          error: errorMsg,
         );
       }
+      
+      print('Push stdout: ${pushResult.stdout}');
+      print('Push stderr: ${pushResult.stderr}');
       
       _logger.info('✅ Git operations completed successfully');
       return GitOperationResult(
@@ -182,8 +223,10 @@ class GitHelper {
         branchName: branchName,
       );
       
-    } catch (error) {
-      _logger.severe('Git operations failed: $error');
+    } catch (error, stackTrace) {
+      final errorMsg = 'Git operations failed: $error\n$stackTrace';
+      _logger.severe(errorMsg);
+      print('ERROR: $errorMsg');
       return GitOperationResult(
         success: false,
         error: error.toString(),
