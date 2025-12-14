@@ -154,6 +154,21 @@ jobs:
           # Run git operations from project root
           cd "$GITHUB_WORKSPACE"
           
+          # Remove .env file to prevent committing secrets
+          if [ -f .env ]; then
+            echo "🗑️  Removing .env file (contains secrets, should not be committed)"
+            rm .env
+          fi
+          
+          # Ensure .gitignore exists and includes .env
+          if [ ! -f .gitignore ]; then
+            echo "📝 Creating .gitignore"
+            echo ".env" > .gitignore
+          elif ! grep -q "^\.env$" .gitignore; then
+            echo "📝 Adding .env to .gitignore"
+            echo ".env" >> .gitignore
+          fi
+          
           # Capture both stdout and stderr
           set +e  # Don't exit on error
           OUTPUT=$(orbithub git-operations --ticket-key "$TICKET_KEY" 2>&1)
