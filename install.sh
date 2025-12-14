@@ -49,7 +49,14 @@ detect_platform() {
     
     case "$(uname -m)" in
         x86_64|amd64) arch="amd64" ;;
-        arm64|aarch64) arch="arm64" ;;
+        arm64|aarch64) 
+            # Use amd64 for ARM64 Macs (Rosetta 2 compatible)
+            if [[ "$os" == "darwin" ]]; then
+                arch="amd64"
+            else
+                arch="arm64"
+            fi
+            ;;
         *) error "Unsupported architecture: $(uname -m)" ;;
     esac
     
