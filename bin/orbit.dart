@@ -7,7 +7,7 @@ import 'package:orbithub/orbithub.dart';
 import 'package:orbithub/mcp/cli/mcp_cli_handler.dart';
 import 'package:orbithub/workflows/git_helper.dart';
 import 'package:orbithub/workflows/pr_helper.dart';
-import 'ai_development.dart' as ai_dev;
+import 'package:orbithub/workflows/ai_development_runner.dart';
 
 /// OrbitHub CLI - Command-line interface for Jira automation
 void main(List<String> arguments) async {
@@ -416,8 +416,8 @@ Future<void> _runAiTeammate(String ticketKey) async {
 }
 
 Future<void> _runAiDevelopment(String ticketKey) async {
-  // Call the main function directly (works in compiled binary)
-  await ai_dev.main([ticketKey]);
+  // Call the library function directly (works in compiled binary)
+  await runAiDevelopment(ticketKey);
 }
 
 Future<void> _runGitOperations(String ticketKey) async {
