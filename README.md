@@ -42,9 +42,25 @@ OrbitHub is a complete Jira automation framework written in Dart. It provides a 
 
 ### Installation
 
+**Option 1: Install from Releases (Recommended)**
+
+One-line installation - downloads and installs the latest pre-built binary:
+
+```bash
+curl -fsSL https://github.com/bogmanSDK/orbithub/releases/latest/download/install.sh | bash
+```
+
+After installation, restart your shell or run:
+```bash
+source ~/.zshrc  # or ~/.bashrc
+orbit --version
+```
+
+**Option 2: Build from Source**
+
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/orbithub.git
+git clone https://github.com/bogmanSDK/orbithub.git
 cd orbithub
 
 # Install dependencies
@@ -56,6 +72,11 @@ dart compile exe bin/orbit.dart -o orbit
 # Move to PATH (optional)
 sudo mv orbit /usr/local/bin/
 ```
+
+### System Requirements
+
+- **For pre-built binary**: No dependencies! Just download and run
+- **For building from source**: Dart SDK 3.0+ required
 
 ### Configuration
 
@@ -169,6 +190,73 @@ void main() async {
   await jira.moveToStatus(newTicket.key, 'In Progress');
 }
 ```
+
+## 🤖 AI Development Phase
+
+OrbitHub now includes an **AI Development Phase** that automates code implementation based on Jira ticket Acceptance Criteria:
+
+### How It Works
+
+1. **Fetch Ticket**: Automatically retrieves ticket details including AC from Jira
+2. **Prepare Context**: Collects ticket summary, description, AC, Q&A from subtasks
+3. **AI Implementation**: Uses Cursor AI to generate code following existing patterns
+4. **Automated Git**: Creates branch, commits changes, pushes to GitHub
+5. **Pull Request**: Automatically creates PR with implementation summary
+6. **Jira Updates**: Posts PR link to ticket, moves to "In Review" status
+
+### GitHub Actions Integration
+
+Add to your project repository (`.github/workflows/ai-development.yml`):
+
+```yaml
+name: AI Development
+
+on:
+  repository_dispatch:
+    types: [ai-development-trigger]
+  workflow_dispatch:
+    inputs:
+      ticket_key:
+        description: 'Jira ticket key'
+        required: true
+        type: string
+
+jobs:
+  develop:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install OrbitHub CLI
+        run: |
+          curl -fsSL https://github.com/bogmanSDK/orbithub/releases/latest/download/install.sh | bash
+          echo "$HOME/.orbithub/bin" >> $GITHUB_PATH
+      
+      - name: Install Cursor CLI
+        run: curl https://cursor.com/install -fsS | bash
+      
+      - name: Run AI Development
+        env:
+          JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          JIRA_BASE_PATH: ${{ vars.JIRA_BASE_PATH }}
+          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+        run: |
+          orbit ai-development --ticket-key ${{ inputs.ticket_key }}
+```
+
+### Usage
+
+**Manual trigger from GitHub UI:**
+1. Go to Actions → AI Development
+2. Click "Run workflow"
+3. Enter Jira ticket key (e.g., `PROJ-123`)
+4. Wait for PR to be created
+
+**Automated trigger from Jira:**
+Set up Jira Automation to trigger when ticket is assigned to AI Agent.
+
+See [docs/AI_TEAMMATE_SETUP.md](docs/AI_TEAMMATE_SETUP.md) for complete setup guide.
 
 ## 🤖 AI Teammate Workflow
 
