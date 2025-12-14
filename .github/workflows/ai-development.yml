@@ -52,8 +52,8 @@ jobs:
           export PATH="$HOME/.orbithub/bin:$PATH"
           
           # Verify installation
-          if command -v orbit >/dev/null 2>&1; then
-            echo "✅ OrbitHub installed: $(orbit --version 2>&1 || echo 'OK')"
+          if [ -f "$HOME/.orbithub/bin/orbithub" ]; then
+            echo "✅ OrbitHub installed: $($HOME/.orbithub/bin/orbithub --version 2>&1 || echo 'OK')"
           else
             echo "❌ OrbitHub installation failed"
             exit 1
@@ -137,7 +137,7 @@ jobs:
           echo "🎯 Processing ticket: $TICKET_KEY"
           # Run from project root using OrbitHub CLI
           cd "$GITHUB_WORKSPACE"
-          orbit ai-development --ticket-key "$TICKET_KEY"
+          orbithub ai-development --ticket-key "$TICKET_KEY"
       
       - name: 🔧 Git Operations
         id: git_ops
@@ -153,7 +153,7 @@ jobs:
           
           # Run git operations from project root
           cd "$GITHUB_WORKSPACE"
-          OUTPUT=$(orbit git-operations --ticket-key "$TICKET_KEY" 2>&1)
+          OUTPUT=$(orbithub git-operations --ticket-key "$TICKET_KEY" 2>&1)
           echo "$OUTPUT"
           
           # Extract branch name from output (look for "Branch: feature/AIH-1" pattern)
@@ -186,7 +186,7 @@ jobs:
           
           # Run from project root
           cd "$GITHUB_WORKSPACE"
-          orbit create-pr --ticket-key "$TICKET_KEY" --branch-name "$BRANCH_NAME"
+          orbithub create-pr --ticket-key "$TICKET_KEY" --branch-name "$BRANCH_NAME"
       
       - name: 📊 Summary
         if: always()
