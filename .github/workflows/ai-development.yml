@@ -36,17 +36,30 @@ jobs:
         with:
           fetch-depth: 0  # Full history needed for branch operations
       
-      # Step 2: Install OrbitHub CLI (latest version from GitHub Releases)
-      - name: 📥 Install OrbitHub CLI
+      # Step 2: Setup Dart and install OrbitHub dependencies
+      - name: 📦 Setup Dart
+        uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+      
+      - name: 📥 Install OrbitHub CLI from releases
         run: |
+          echo "📦 Installing OrbitHub CLI..."
           curl -fsSL https://github.com/bogmanSDK/orbithub/releases/latest/download/install.sh | bash
+          
+          # Add to PATH
           echo "$HOME/.orbithub/bin" >> $GITHUB_PATH
+          export PATH="$HOME/.orbithub/bin:$PATH"
           
           # Verify installation
-          orbithub --version || (echo "Error: OrbitHub installation failed" && exit 1)
+          if command -v orbit >/dev/null 2>&1; then
+            echo "✅ OrbitHub installed: $(orbit --version 2>&1 || echo 'OK')"
+          else
+            echo "❌ OrbitHub installation failed"
+            exit 1
+          fi
       
       - name: 🔧 Setup environment
-        working-directory: orbithub
         env:
           JIRA_BASE_PATH: ${{ secrets.JIRA_BASE_PATH }}
           JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
@@ -68,7 +81,7 @@ jobs:
             exit 1
           fi
           
-          # Create .env file in project root (not orbithub/)
+          # Create .env file in project root
           cd "$GITHUB_WORKSPACE"
           echo "JIRA_BASE_PATH=$JIRA_BASE_PATH" >> .env
           echo "JIRA_EMAIL=$JIRA_EMAIL" >> .env
@@ -112,7 +125,7 @@ jobs:
           CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
           MODEL: sonnet-4.5
           AGENT_DISABLE_WATCHDOG: "1"
-          PATH: "/home/runner/.local/bin:/bin:/usr/bin:$PATH"
+          PATH: "/home/runner/.local/bin:/home/runner/.orbithub/bin:/bin:/usr/bin:$PATH"
         run: |
           TICKET_KEY="${{ inputs.ticket_key || github.event.inputs.ticket_key }}"
           
@@ -124,7 +137,7 @@ jobs:
           echo "🎯 Processing ticket: $TICKET_KEY"
           # Run from project root using OrbitHub CLI
           cd "$GITHUB_WORKSPACE"
-          orbithub ai-development --ticket-key "$TICKET_KEY"
+          orbit ai-development --ticket-key "$TICKET_KEY"
       
       - name: 🔧 Git Operations
         id: git_ops
@@ -140,7 +153,7 @@ jobs:
           
           # Run git operations from project root
           cd "$GITHUB_WORKSPACE"
-          OUTPUT=$(orbithub git-operations --ticket-key "$TICKET_KEY" 2>&1)
+          OUTPUT=$(orbit git-operations --ticket-key "$TICKET_KEY" 2>&1)
           echo "$OUTPUT"
           
           # Extract branch name from output (look for "Branch: feature/AIH-1" pattern)
@@ -173,7 +186,7 @@ jobs:
           
           # Run from project root
           cd "$GITHUB_WORKSPACE"
-          orbithub create-pr --ticket-key "$TICKET_KEY" --branch-name "$BRANCH_NAME"
+          orbit create-pr --ticket-key "$TICKET_KEY" --branch-name "$BRANCH_NAME"
       
       - name: 📊 Summary
         if: always()
