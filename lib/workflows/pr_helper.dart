@@ -93,16 +93,15 @@ class PrHelper {
       final wrapper = JiraOperationWrapper();
       
       final comment = '''
-h3. *Development Completed*
+### 🎉 Development Completed
 
-*Branch:* {code}$branchName{code}
+**Branch:** `$branchName`
+**Pull Request:** ${prUrl ?? 'Created (check GitHub)'}
 
-${prUrl != null ? '*Pull Request:* $prUrl' : '*Pull Request:* Created (check GitHub for URL)'}
-
-AI Teammate has completed the implementation and created a pull request for review.
+✅ AI has completed the implementation and created a pull request for review.
 ''';
       
-      await wrapper.postComment(ticketKey, comment, useMarkdown: false);
+      await wrapper.postComment(ticketKey, comment, useMarkdown: true);
       
       _logger.info('✅ Posted PR comment to $ticketKey');
       return true;
@@ -125,15 +124,18 @@ AI Teammate has completed the implementation and created a pull request for revi
       final wrapper = JiraOperationWrapper();
       
       final comment = '''
-h3. *Development Workflow Error*
+### ❌ Development Workflow Error
 
-*Stage:* $stage
-*Error:* {code}$errorMessage{code}
+**Stage:** $stage
+**Error:**
+```
+$errorMessage
+```
 
-Please check the logs for more details and retry the workflow if needed.
+Please check the GitHub Actions logs for more details and retry the workflow if needed.
 ''';
       
-      await wrapper.postComment(ticketKey, comment, useMarkdown: false);
+      await wrapper.postComment(ticketKey, comment, useMarkdown: true);
       
       _logger.info('Posted error comment to $ticketKey');
       return true;
