@@ -1,0 +1,189 @@
+name: AI Development Phase
+
+on:
+  # Reusable workflow - called from project repositories
+  workflow_call:
+    inputs:
+      ticket_key:
+        description: 'Jira ticket key (e.g., AIH-1)'
+        required: true
+        type: string
+  
+  # Manual trigger - for running directly from GitHub UI
+  workflow_dispatch:
+    inputs:
+      ticket_key:
+        description: 'Jira ticket key (e.g., AIH-43)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: read
+
+jobs:
+  develop-ticket:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: ai-development-${{ inputs.ticket_key || github.event.inputs.ticket_key }}
+      cancel-in-progress: false
+    
+    steps:
+      # Step 1: Checkout project repository (where code will be implemented)
+      - name: 📥 Checkout project code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history needed for branch operations
+      
+      # Step 2: Install OrbitHub CLI (latest version from GitHub Releases)
+      - name: 📥 Install OrbitHub CLI
+        run: |
+          curl -fsSL https://github.com/bogmanSDK/orbithub/releases/latest/download/install.sh | bash
+          echo "$HOME/.orbithub/bin" >> $GITHUB_PATH
+          
+          # Verify installation
+          orbithub --version || (echo "Error: OrbitHub installation failed" && exit 1)
+      
+      - name: 🔧 Setup environment
+        working-directory: orbithub
+        env:
+          JIRA_BASE_PATH: ${{ secrets.JIRA_BASE_PATH }}
+          JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          AI_PROVIDER: ${{ secrets.AI_PROVIDER }}
+          AI_API_KEY: ${{ secrets.AI_API_KEY }}
+        run: |
+          # Validate required secrets
+          if [ -z "$JIRA_BASE_PATH" ]; then
+            echo "❌ Error: JIRA_BASE_PATH secret is not set"
+            exit 1
+          fi
+          if [ -z "$JIRA_EMAIL" ]; then
+            echo "❌ Error: JIRA_EMAIL secret is not set"
+            exit 1
+          fi
+          if [ -z "$JIRA_API_TOKEN" ]; then
+            echo "❌ Error: JIRA_API_TOKEN secret is not set"
+            exit 1
+          fi
+          
+          # Create .env file in project root (not orbithub/)
+          cd "$GITHUB_WORKSPACE"
+          echo "JIRA_BASE_PATH=$JIRA_BASE_PATH" >> .env
+          echo "JIRA_EMAIL=$JIRA_EMAIL" >> .env
+          echo "JIRA_API_TOKEN=$JIRA_API_TOKEN" >> .env
+          echo "AI_PROVIDER=${AI_PROVIDER:-openai}" >> .env
+          echo "AI_API_KEY=$AI_API_KEY" >> .env
+          echo "✅ Environment configured"
+      
+      - name: 🔧 Install Cursor CLI
+        run: |
+          echo "Installing Cursor CLI..."
+          curl https://cursor.com/install -fsS | bash
+          
+          echo "Checking installation locations..."
+          ls -la "$HOME/.cursor/" || echo "No .cursor directory"
+          ls -la "$HOME/.cursor/bin/" || echo "No .cursor/bin directory"
+          ls -la "$HOME/.local/bin/" || echo "No .local/bin directory"
+          
+          # Cursor CLI installs to ~/.local/bin, not ~/.cursor/bin
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          
+          # Test installation
+          export PATH="$HOME/.local/bin:$PATH"
+          if command -v cursor-agent; then
+            echo "✅ cursor-agent found at: $(command -v cursor-agent)"
+            cursor-agent --version 2>&1 || echo "Version check failed"
+          else
+            echo "❌ cursor-agent not found after installation"
+            echo "Available files in .local/bin:"
+            ls -la "$HOME/.local/bin/" 2>/dev/null || echo "Directory does not exist"
+            exit 1
+          fi
+      
+      - name: 🤖 Run Development Phase
+        env:
+          JIRA_BASE_PATH: ${{ secrets.JIRA_BASE_PATH }}
+          JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          AI_PROVIDER: ${{ secrets.AI_PROVIDER }}
+          AI_API_KEY: ${{ secrets.AI_API_KEY }}
+          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+          MODEL: sonnet-4.5
+          AGENT_DISABLE_WATCHDOG: "1"
+          PATH: "/home/runner/.local/bin:/bin:/usr/bin:$PATH"
+        run: |
+          TICKET_KEY="${{ inputs.ticket_key || github.event.inputs.ticket_key }}"
+          
+          if [ -z "$TICKET_KEY" ]; then
+            echo "❌ Error: Ticket key is empty"
+            exit 1
+          fi
+          
+          echo "🎯 Processing ticket: $TICKET_KEY"
+          # Run from project root using OrbitHub CLI
+          cd "$GITHUB_WORKSPACE"
+          orbithub ai-development --ticket-key "$TICKET_KEY"
+      
+      - name: 🔧 Git Operations
+        id: git_ops
+        env:
+          JIRA_BASE_PATH: ${{ secrets.JIRA_BASE_PATH }}
+          JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TICKET_KEY="${{ inputs.ticket_key || github.event.inputs.ticket_key }}"
+          
+          echo "🔧 Running git operations for ticket: $TICKET_KEY"
+          
+          # Run git operations from project root
+          cd "$GITHUB_WORKSPACE"
+          OUTPUT=$(orbithub git-operations --ticket-key "$TICKET_KEY" 2>&1)
+          echo "$OUTPUT"
+          
+          # Extract branch name from output (look for "Branch: feature/AIH-1" pattern)
+          BRANCH_NAME=$(echo "$OUTPUT" | grep -oP 'Branch: \K[^\s]+' | tail -1)
+          
+          if [ -z "$BRANCH_NAME" ]; then
+            # Fallback: get current branch
+            BRANCH_NAME=$(git branch --show-current)
+          fi
+          
+          echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
+          echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV
+      
+      - name: 📝 Create Pull Request
+        env:
+          JIRA_BASE_PATH: ${{ secrets.JIRA_BASE_PATH }}
+          JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TICKET_KEY="${{ inputs.ticket_key || github.event.inputs.ticket_key }}"
+          BRANCH_NAME="${{ steps.git_ops.outputs.branch_name }}"
+          
+          if [ -z "$BRANCH_NAME" ]; then
+            BRANCH_NAME="unknown"
+          fi
+          
+          echo "📝 Creating PR for ticket: $TICKET_KEY"
+          echo "🌿 Branch: $BRANCH_NAME"
+          
+          # Run from project root
+          cd "$GITHUB_WORKSPACE"
+          orbithub create-pr --ticket-key "$TICKET_KEY" --branch-name "$BRANCH_NAME"
+      
+      - name: 📊 Summary
+        if: always()
+        run: |
+          echo "### AI Development Phase Complete 🚀" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          TICKET_KEY="${{ inputs.ticket_key || github.event.inputs.ticket_key }}"
+          echo "**Ticket**: $TICKET_KEY" >> $GITHUB_STEP_SUMMARY
+          echo "**Status**: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Repository**: ${{ github.repository }}" >> $GITHUB_STEP_SUMMARY
+          if [ -n "${BRANCH_NAME:-}" ]; then
+            echo "**Branch**: $BRANCH_NAME" >> $GITHUB_STEP_SUMMARY
+          fi
