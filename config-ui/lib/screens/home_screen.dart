@@ -118,9 +118,9 @@ class _HomeScreenState extends State<HomeScreen> {
         appBar: AppBar(
           title: const Text('OrbitHub Configuration'),
           bottom: TabBar(
-            labelColor: Colors.white, // White selected tab
-            unselectedLabelColor: const Color(0xFFB0B0B0), // Muted grey unselected tab
-            indicatorColor: const Color(0xFF2196F3), // Blue indicator
+            labelColor: Theme.of(context).colorScheme.onSurface,
+            unselectedLabelColor: Theme.of(context).colorScheme.onSurfaceVariant,
+            indicatorColor: Theme.of(context).colorScheme.primary,
             tabs: const [
               Tab(icon: Icon(Icons.bug_report), text: 'Jira'),
               Tab(icon: Icon(Icons.psychology), text: 'AI'),
@@ -151,10 +151,10 @@ class _HomeScreenState extends State<HomeScreen> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: const Color(0xFF1E1E1E), // Card background
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
                 border: Border(
                   top: BorderSide(
-                    color: const Color(0xFF424242), // Subtle divider
+                    color: Theme.of(context).dividerColor,
                     width: 1,
                   ),
                 ),
