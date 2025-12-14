@@ -453,6 +453,20 @@ _AI-powered implementation is now available!_ 🤖
         final targetStatus = readyForDevTransition.to?.name ?? readyForDevTransition.name;
         await wrapper.moveToStatus(ticketKey, targetStatus!);
         print('   ✅ Moved to "$targetStatus" - AC is ready for development');
+        
+        // Step 9a: Assign ticket back to reporter
+        print('\n👤 Step 9a: Assigning ticket to reporter...');
+        final reporter = ticket.fields.reporter;
+        if (reporter != null && reporter.accountId != null) {
+          try {
+            await wrapper.assignTicket(ticketKey, reporter.accountId!);
+            print('   ✅ Assigned to: ${reporter.displayName}');
+          } catch (e) {
+            print('   ⚠️  Could not reassign: $e');
+          }
+        } else {
+          print('   ⚠️  No reporter found, skipping reassignment');
+        }
       } else {
         print('   ⚠️  "READY FOR DEV" status not available');
         print('   Available transitions: ${transitions.map((t) => t.name).join(", ")}');
