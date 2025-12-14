@@ -156,7 +156,7 @@ _No clarification questions needed!_ 🚀
           print('   Status: Clear requirements ✅');
           print('   Action: Proceeding with implementation');
           print('\n🔗 View ticket: ${wrapper.getTicketBrowseUrl(ticketKey)}');
-          print('\n💡 Next: AI will implement the feature (coming soon)');
+          print('\n💡 Next: Trigger Development Phase workflow to implement the feature');
           
           exit(0);
         }
@@ -418,15 +418,20 @@ ${acceptanceCriteria != null ? '\n## Generated Acceptance Criteria:\n\n$acceptan
 
 ## Next Steps:
 ✅ Acceptance Criteria have been added to the ticket description
-⚠️ AI implementation phase is not yet available.
 
-**Manual next steps:**
+**To proceed with AI-powered implementation:**
+1. Go to GitHub Actions → "AI Development Phase" workflow
+2. Click "Run workflow"
+3. Enter ticket key: `$ticketKey`
+4. The AI will implement the code, create tests, and open a PR automatically
+
+**Or manually:**
 1. Review the answers above
 2. Implement the feature based on clarifications
 3. Create PR
 4. Link PR to this ticket
 
-_AI-powered implementation coming soon!_ 🤖
+_AI-powered implementation is now available!_ 🤖
 ''';
       
       await wrapper.postComment(ticketKey, completionComment, useMarkdown: true);
@@ -435,21 +440,22 @@ _AI-powered implementation coming soon!_ 🤖
       print('\n💬 Step 8: Skipping completion comment (disabled)');
     }
     
-    // Step 9: Move to In Progress
-    print('\n🔄 Step 9: Updating ticket status...');
+    // Step 9: Move to READY FOR DEV (AC is complete and ready for development)
+    print('\n🔄 Step 9: Moving to "READY FOR DEV"...');
     try {
       final transitions = await wrapper.getTransitions(ticketKey);
-      final inProgressTransition = transitions.where((t) {
+      final readyForDevTransition = transitions.where((t) {
         final toName = t.to?.name?.toLowerCase() ?? '';
-        return toName.contains('progress');
+        return toName.contains('ready') && toName.contains('dev');
       }).firstOrNull;
       
-      if (inProgressTransition != null) {
-        final targetStatus = inProgressTransition.to?.name ?? inProgressTransition.name;
+      if (readyForDevTransition != null) {
+        final targetStatus = readyForDevTransition.to?.name ?? readyForDevTransition.name;
         await wrapper.moveToStatus(ticketKey, targetStatus!);
-        print('   ✅ Moved to "$targetStatus"');
+        print('   ✅ Moved to "$targetStatus" - AC is ready for development');
       } else {
-        print('   ⚠️  "In Progress" transition not available');
+        print('   ⚠️  "READY FOR DEV" status not available');
+        print('   Available transitions: ${transitions.map((t) => t.name).join(", ")}');
       }
     } catch (e) {
       print('   ⚠️  Could not update status: $e');
@@ -465,7 +471,7 @@ _AI-powered implementation coming soon!_ 🤖
     print('   Answers: ${answerStatus.answeredQuestions}');
     print('   Status: ✅ All questions answered');
     print('\n🔗 View ticket: ${wrapper.getTicketBrowseUrl(ticketKey)}');
-    print('\n💡 Next: Implement AI-powered code generation');
+    print('\n💡 Next: Trigger Development Phase workflow to implement the code');
     
   } catch (e, stackTrace) {
     print('\n❌ ERROR: $e');
