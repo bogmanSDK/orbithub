@@ -49,31 +49,24 @@ jobs:
           dart run tool/generate_mcp_files.dart
       
       - name: 🔨 Compile binary
+        shell: bash
         run: |
           echo "Compiling OrbitHub binary for ${{ matrix.platform }}..."
           
-          if [ "${{ runner.os }}" = "Windows" ]; then
-            dart compile exe bin/orbit.dart -o ${{ matrix.binary_name }}
-          else
-            dart compile exe bin/orbit.dart -o ${{ matrix.binary_name }}
-          fi
+          # Compile binary (same command works for all platforms)
+          dart compile exe bin/orbit.dart -o ${{ matrix.binary_name }}
           
           # Verify binary was created
-          if [ "${{ runner.os }}" = "Windows" ]; then
-            if [ ! -f "${{ matrix.binary_name }}" ]; then
-              echo "Error: Binary not created"
-              exit 1
-            fi
-          else
-            if [ ! -f "${{ matrix.binary_name }}" ]; then
-              echo "Error: Binary not created"
-              exit 1
-            fi
-            chmod +x "${{ matrix.binary_name }}"
+          if [ ! -f "${{ matrix.binary_name }}" ]; then
+            echo "Error: Binary not created"
+            exit 1
           fi
           
+          # Make executable (harmless on Windows)
+          chmod +x "${{ matrix.binary_name }}" || true
+          
           echo "Binary created: ${{ matrix.binary_name }}"
-          ls -lh "${{ matrix.binary_name }}" || dir "${{ matrix.binary_name }}"
+          ls -lh "${{ matrix.binary_name }}" 2>/dev/null || dir "${{ matrix.binary_name }}"
       
       - name: 📦 Upload binary artifact
         uses: actions/upload-artifact@v4
@@ -96,6 +89,7 @@ jobs:
           path: binaries/
       
       - name: 📝 Copy install script
+        shell: bash
         run: |
           # Move binaries from subdirectories to main directory
           find binaries -name 'orbithub-*' -type f -exec mv {} binaries/ \;
@@ -108,6 +102,7 @@ jobs:
           find binaries -type d -empty -delete || true
       
       - name: 📦 Prepare release package
+        shell: bash
         run: |
           echo "Prepared binaries:"
           ls -lh binaries/ || dir binaries/

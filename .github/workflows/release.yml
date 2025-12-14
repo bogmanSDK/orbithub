@@ -58,6 +58,7 @@ jobs:
           path: release/
       
       - name: 📝 Create release notes
+        shell: bash
         run: |
           cat > release/RELEASE_NOTES.md << EOF
           # OrbitHub ${{ needs.determine-version.outputs.tag }}
