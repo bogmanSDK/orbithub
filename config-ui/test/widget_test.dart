@@ -4,7 +4,7 @@ import 'package:config_ui/screens/home_screen.dart';
 
 void main() {
   group('HomeScreen Tab Order Tests', () {
-    testWidgets('Tabs are displayed in correct order: Jira, Advanced, AI',
+    testWidgets('Tabs are displayed in correct order: Jira, Advanced, AI, Option A',
         (WidgetTester tester) async {
       // Build the HomeScreen widget
       await tester.pumpWidget(
@@ -18,16 +18,17 @@ void main() {
 
       // Find all Tab widgets
       final tabFinder = find.byType(Tab);
-      expect(tabFinder, findsNWidgets(3));
+      expect(tabFinder, findsNWidgets(4));
 
       // Get the Tab widgets in order
       final tabs = tester.widgetList<Tab>(tabFinder).toList();
 
       // Verify the tab order
-      expect(tabs.length, 3);
+      expect(tabs.length, 4);
       expect((tabs[0].text as Text).data, 'Jira');
       expect((tabs[1].text as Text).data, 'Advanced');
       expect((tabs[2].text as Text).data, 'AI');
+      expect((tabs[3].text as Text).data, 'Option A');
     });
 
     testWidgets('Tab icons are displayed in correct order',
@@ -50,6 +51,7 @@ void main() {
       expect((tabs[0].icon as Icon).icon, Icons.bug_report);
       expect((tabs[1].icon as Icon).icon, Icons.settings);
       expect((tabs[2].icon as Icon).icon, Icons.psychology);
+      expect((tabs[3].icon as Icon).icon, Icons.home);
     });
 
     testWidgets('Advanced tab is positioned between Jira and AI tabs',
@@ -106,7 +108,7 @@ void main() {
       final tabController = DefaultTabController.of(
         tester.element(tabBarView),
       );
-      expect(tabController?.length, 3);
+      expect(tabController?.length, 4);
     });
 
     testWidgets('Tabs maintain functionality after reordering',
