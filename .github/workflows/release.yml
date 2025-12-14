@@ -21,6 +21,30 @@ jobs:
       version: ${{ steps.version.outputs.version }}
       tag: ${{ steps.version.outputs.tag }}
     steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history needed to check branch
+      
+      - name: ✅ Verify tag is on main branch
+        if: github.event_name != 'workflow_dispatch'
+        run: |
+          TAG_NAME="${GITHUB_REF#refs/tags/}"
+          echo "Checking if tag $TAG_NAME points to main branch..."
+          
+          # Get the commit SHA that the tag points to
+          TAG_COMMIT=$(git rev-list -n 1 "$TAG_NAME")
+          echo "Tag $TAG_NAME points to commit: $TAG_COMMIT"
+          
+          # Check if this commit is on main branch
+          if git branch -r --contains "$TAG_COMMIT" | grep -q "origin/main"; then
+            echo "✅ Tag $TAG_NAME is on main branch"
+          else
+            echo "❌ Error: Tag $TAG_NAME does not point to a commit on main branch"
+            echo "Releases can only be created from main branch for stability."
+            exit 1
+          fi
+      
       - name: 🔍 Determine version
         id: version
         run: |
