@@ -7,6 +7,10 @@ import 'package:orbithub/core/jira/jira_config.dart';
 import 'package:orbithub/core/jira/jira_client.dart';
 import 'package:orbithub/mcp/wrappers/jira_operation_wrapper.dart';
 import 'package:orbithub/workflows/answer_checker.dart';
+import 'package:orbithub/core/config/config_loader.dart';
+import 'package:orbithub/core/config/prompt_loader.dart';
+import 'package:orbithub/core/confluence/confluence_client.dart';
+import 'package:orbithub/core/confluence/confluence_config.dart';
 import 'package:path/path.dart' as path;
 
 /// Run the AI development phase for a given ticket
@@ -19,9 +23,6 @@ Future<void> runAiDevelopment(String ticketKey) async {
   try {
     // Initialize Jira operations wrapper
     final wrapper = JiraOperationWrapper();
-    final checker = wrapper.isUsingMcpTools 
-        ? AnswerChecker.withWrapper(wrapper)
-        : AnswerChecker(JiraClient(JiraConfig.fromEnvironment()));
     
     if (wrapper.isUsingMcpTools) {
       print('   🔧 Using MCP tools mode');
@@ -104,36 +105,77 @@ Future<void> runAiDevelopment(String ticketKey) async {
     final cursorAgentPath = cursorAgentCheck.stdout.toString().trim();
     print('   ✅ Found cursor-agent at: $cursorAgentPath');
     
-    // Step 7: Run cursor-agent
-    print('\n🚀 Step 7: Running Cursor AI agent...');
-    print('   This may take several minutes...\n');
+    // Step 7: Load development prompt from config
+    print('\n📋 Step 7: Loading development configuration...');
+    String prompt;
+    try {
+      final configLoader = ConfigLoader();
+      final agentConfig = await configLoader.loadConfig('ai_development');
+      final agentParams = agentConfig.params.agentParams;
+      
+      // Initialize Confluence client if available
+      ConfluenceClient? confluenceClient;
+      try {
+        final confluenceConfig = ConfluenceConfig.fromEnvironment();
+        confluenceClient = ConfluenceClient(confluenceConfig);
+      } catch (e) {
+        // Confluence not configured, continue without it
+      }
+      
+      final promptLoader = PromptLoader(confluenceClient: confluenceClient);
+      
+      // Load prompt template from file
+      prompt = await promptLoader.loadPrompt('development', {});
+      print('   ✅ Loaded prompt from lib/prompts/development.md');
+      
+      // Process instructions (load from Confluence if URLs detected)
+      final processedInstructions = await promptLoader.processInstructions(
+        agentParams.instructions,
+      );
+      
+      // Build final prompt
+      final buffer = StringBuffer();
+      
+      // Add role
+      buffer.writeln('You are ${agentParams.aiRole}.');
+      buffer.writeln('');
+      
+      // Add processed instructions
+      for (final instruction in processedInstructions) {
+        buffer.writeln(instruction);
+        buffer.writeln('');
+      }
+      
+      // Add prompt template
+      buffer.write(prompt);
+      
+      // Add few-shot examples if available
+      if (agentParams.fewShots.isNotEmpty) {
+        buffer.writeln('');
+        buffer.writeln('EXAMPLE:');
+        buffer.writeln(agentParams.fewShots);
+      }
+      
+      // Add formatting rules if available
+      if (agentParams.formattingRules.isNotEmpty) {
+        buffer.writeln('');
+        buffer.writeln('FORMATTING RULES:');
+        buffer.writeln(agentParams.formattingRules);
+      }
+      
+      prompt = buffer.toString();
+      print('   ✅ Configuration loaded successfully');
+    } catch (e) {
+      throw Exception(
+        'Failed to load development agent config: $e\n'
+        'Please ensure agents/ai_development.json exists and is valid JSON.\n'
+        'Also ensure lib/prompts/development.md exists.',
+      );
+    }
     
-    final prompt = '''
-Read ticket details from the 'input' folder which contains complete ticket context automatically prepared by the Development Phase workflow.
-
-Analyze the ticket requirements, acceptance criteria, and business rules carefully.
-
-Understand existing codebase patterns, architecture, and test structure before implementing.
-
-Implement code changes based on ticket requirements including:
-  - Source code implementation following existing patterns and architecture
-  - Unit tests following existing test patterns in the codebase
-  - Documentation updates ONLY if explicitly mentioned in ticket requirements
-
-DO NOT create git branches, commit, or push changes - this is handled by post-processing workflow.
-
-Write a comprehensive development summary to outputs/response.md with the following sections:
-  - ## Approach: Design decisions made during implementation
-  - ## Files Modified: List of files created or modified with brief explanation
-  - ## Test Coverage: Describe what tests were created
-  - ## Issues/Notes: Any issues encountered or incomplete implementations (if any)
-
-The outputs/response.md content will be automatically appended to the Pull Request description.
-
-IMPORTANT: You are only responsible for code implementation - git operations and PR creation are automated.
-
-You must compile and run tests before finishing.
-''';
+    // Step 8: Run cursor-agent
+    print('\n🚀 Step 8: Running Cursor AI agent...');
+    print('   This may take several minutes...\n');
     
     final cursorAgentProcess = await Process.start(
       'cursor-agent',
@@ -158,8 +200,8 @@ You must compile and run tests before finishing.
     
     print('\n   ✅ Cursor agent completed successfully');
     
-    // Step 8: Verify outputs/response.md exists
-    print('\n📄 Step 8: Verifying development summary...');
+    // Step 9: Verify outputs/response.md exists
+    print('\n📄 Step 9: Verifying development summary...');
     final responseFile = File('outputs/response.md');
     
     if (!await responseFile.exists()) {
@@ -268,4 +310,5 @@ String _buildTicketContext({
   
   return buffer.toString();
 }
+
 

@@ -2,7 +2,8 @@ import 'package:dart_openai/dart_openai.dart';
 import 'ai_provider.dart';
 import '../core/confluence/confluence_client.dart';
 import '../core/confluence/template_config.dart';
-import '../core/templates/prompt_templates.dart';
+import '../core/config/config_loader.dart';
+import '../core/config/prompt_loader.dart';
 
 /// OpenAI implementation of AI provider
 /// 
@@ -12,13 +13,19 @@ class OpenAIProvider implements AIProvider {
   final AIConfig config;
   final ConfluenceClient? _confluenceClient;
   final TemplateConfig _templateConfig;
+  final ConfigLoader _configLoader;
+  final PromptLoader _promptLoader;
   
   OpenAIProvider(
     this.config, {
     ConfluenceClient? confluenceClient,
     TemplateConfig? templateConfig,
+    ConfigLoader? configLoader,
+    PromptLoader? promptLoader,
   })  : _confluenceClient = confluenceClient,
-        _templateConfig = templateConfig ?? TemplateConfig.hardcoded() {
+        _templateConfig = templateConfig ?? TemplateConfig.hardcoded(),
+        _configLoader = configLoader ?? ConfigLoader(),
+        _promptLoader = promptLoader ?? PromptLoader(confluenceClient: confluenceClient) {
     OpenAI.apiKey = config.apiKey;
     if (config.model != null) {
       OpenAI.requestsTimeOut = const Duration(seconds: 60);
@@ -87,7 +94,7 @@ class OpenAIProvider implements AIProvider {
     required String ticketDescription,
     required Map<String, String> questionsAndAnswers,
   }) async {
-    final prompt = _buildImplementationPrompt(
+    final prompt = await _buildImplementationPrompt(
       ticketTitle: ticketTitle,
       ticketDescription: ticketDescription,
       questionsAndAnswers: questionsAndAnswers,
@@ -132,7 +139,7 @@ class OpenAIProvider implements AIProvider {
     }
   }
   
-  /// Load template from Confluence or use hardcoded
+  /// Load template from Confluence (if configured)
   Future<String> _loadTemplate(String templateType) async {
     if (_templateConfig.usesConfluence && _confluenceClient != null) {
       final url = _templateConfig.getTemplateUrl(templateType);
@@ -143,27 +150,15 @@ class OpenAIProvider implements AIProvider {
           print('   ✅ Template loaded (${content.length} chars)');
           return content;
         } catch (e) {
-          print('   ⚠️  Failed to load Confluence template: $e');
-          print('   💡 Falling back to hardcoded template');
+          throw Exception(
+            'Failed to load $templateType template from Confluence: $e\n'
+            'Please ensure TEMPLATE_${templateType.toUpperCase()}_URL is correct in .env',
+          );
         }
       }
     }
-    return _getHardcodedTemplate(templateType);
-  }
-
-  /// Get hardcoded template (fallback)
-  /// Templates are centralized in lib/core/templates/prompt_templates.dart
-  String _getHardcodedTemplate(String templateType) {
-    switch (templateType) {
-      case 'questions':
-        return PromptTemplates.getTemplate(TemplateType.questions);
-      case 'acceptance_criteria':
-        return PromptTemplates.getTemplate(TemplateType.acceptanceCriteria);
-      case 'solution_design':
-        return PromptTemplates.getTemplate(TemplateType.solutionDesign);
-      default:
-        return '';
-    }
+    // Return empty string if Confluence not configured (template will come from markdown file)
+    return '';
   }
 
   Future<String> _buildQuestionsPrompt({
@@ -172,75 +167,98 @@ class OpenAIProvider implements AIProvider {
     String? projectContext,
     required int maxQuestions,
   }) async {
-    final buffer = StringBuffer();
-    
-    buffer.writeln('You are a senior software engineer reviewing a Jira ticket.');
-    buffer.writeln('');
-    buffer.writeln('**Title:** $ticketTitle');
-    buffer.writeln('');
-    buffer.writeln('**Description:**');
-    buffer.writeln(ticketDescription.isEmpty ? '(No description provided)' : ticketDescription);
-    
-    if (projectContext != null && projectContext.isNotEmpty) {
+    try {
+      // Try to load from JSON config
+      final agentConfig = await _configLoader.loadConfig('ai_questions');
+      final agentParams = agentConfig.params.agentParams;
+      
+      // Load prompt template from file
+      final promptTemplate = await _promptLoader.loadPrompt('questions', {
+        'ticketTitle': ticketTitle,
+        'ticketDescription': ticketDescription.isEmpty 
+            ? '(No description provided)' 
+            : ticketDescription,
+        'maxQuestions': maxQuestions.toString(),
+        if (projectContext != null && projectContext.isNotEmpty) 
+          'projectContext': projectContext,
+      });
+      
+      // Process instructions (load from Confluence if URLs detected)
+      final processedInstructions = await _promptLoader.processInstructions(
+        agentParams.instructions,
+      );
+      
+      // Build final prompt
+      final buffer = StringBuffer();
+      
+      // Add role
+      buffer.writeln('You are ${agentParams.aiRole}.');
       buffer.writeln('');
-      buffer.writeln('**Project Context:**');
-      buffer.writeln(projectContext);
+      
+      // Add processed instructions
+      for (final instruction in processedInstructions) {
+        buffer.writeln(instruction);
+        buffer.writeln('');
+      }
+      
+      // Load template content from Confluence (if configured) or use empty
+      String templateContent = '';
+      try {
+        templateContent = await _loadTemplate('questions');
+      } catch (e) {
+        // If Confluence template fails, continue without it
+        // The markdown file should contain the template structure
+        print('   ⚠️  Could not load template from Confluence: $e');
+      }
+      final finalPromptTemplate = promptTemplate.replaceAll('{{templateContent}}', templateContent);
+      
+      // Add prompt template
+      buffer.write(finalPromptTemplate);
+      
+      // Add few-shot examples if available
+      if (agentParams.fewShots.isNotEmpty) {
+        buffer.writeln('');
+        buffer.writeln('EXAMPLE:');
+        buffer.writeln(agentParams.fewShots);
+      }
+      
+      // Add formatting rules if available
+      if (agentParams.formattingRules.isNotEmpty) {
+        buffer.writeln('');
+        buffer.writeln('FORMATTING RULES:');
+        buffer.writeln(agentParams.formattingRules);
+      }
+      
+      return buffer.toString();
+    } catch (e) {
+      throw Exception(
+        'Failed to load agent config for questions generation: $e\n'
+        'Please ensure agents/ai_questions.json exists and is valid JSON.',
+      );
     }
-    
-    buffer.writeln('');
-    buffer.writeln('TASK: Analyze if there is enough information to implement this ticket.');
-    buffer.writeln('');
-    buffer.writeln('IF everything is clear and well-defined (simple fix, clear requirements):');
-    buffer.writeln('  → Return EXACTLY the word: CLEAR');
-    buffer.writeln('  → Do NOT generate any questions');
-    buffer.writeln('');
-    buffer.writeln('IF there are unclear points that need clarification:');
-    buffer.writeln('  → Generate 1-$maxQuestions specific technical questions');
-    buffer.writeln('  → Focus on critical missing information only');
-    buffer.writeln('');
-    
-    // Load template (from Confluence or hardcoded)
-    final template = await _loadTemplate('questions');
-    buffer.write(template);
-    buffer.writeln('');
-    buffer.writeln('IMPORTANT:');
-    buffer.writeln('- Always provide specific options (not vague "yes/no")');
-    buffer.writeln('- Include concrete examples in options');
-    buffer.writeln('- Leave "Decision:" empty for user to fill');
-    buffer.writeln('- Separate questions with ---QUESTION--- and ---END--- markers');
-    buffer.writeln('');
-    buffer.writeln('Decision: CLEAR or generate questions using the format above?');
-    
-    return buffer.toString();
   }
   
-  String _buildImplementationPrompt({
+  Future<String> _buildImplementationPrompt({
     required String ticketTitle,
     required String ticketDescription,
     required Map<String, String> questionsAndAnswers,
-  }) {
-    final buffer = StringBuffer();
-    
-    buffer.writeln('Create an implementation plan for this ticket:');
-    buffer.writeln('');
-    buffer.writeln('**Title:** $ticketTitle');
-    buffer.writeln('**Description:** $ticketDescription');
-    buffer.writeln('');
-    buffer.writeln('**Questions and Answers:**');
+  }) async {
+    // Build Q&A section
+    final qaBuffer = StringBuffer();
     questionsAndAnswers.forEach((question, answer) {
-      buffer.writeln('Q: $question');
-      buffer.writeln('A: $answer');
-      buffer.writeln('');
+      qaBuffer.writeln('Q: $question');
+      qaBuffer.writeln('A: $answer');
+      qaBuffer.writeln('');
     });
     
-    buffer.writeln('Generate a markdown implementation plan with:');
-    buffer.writeln('1. Summary');
-    buffer.writeln('2. Technical approach');
-    buffer.writeln('3. Files to modify');
-    buffer.writeln('4. Testing strategy');
-    buffer.writeln('5. Potential risks');
-    
-    return buffer.toString();
+    // Load prompt template from markdown file
+    return await _promptLoader.loadPrompt('implementation_plan', {
+      'ticketTitle': ticketTitle,
+      'ticketDescription': ticketDescription.isEmpty 
+          ? '(No description provided)' 
+          : ticketDescription,
+      'questionsAndAnswers': qaBuffer.toString(),
+    });
   }
   
   List<String> _parseQuestions(String response) {
@@ -315,7 +333,7 @@ class OpenAIProvider implements AIProvider {
     required Map<String, String> questionsAndAnswers,
     String? existingDescription,
   }) async {
-    final prompt = _buildAcceptanceCriteriaPrompt(
+    final prompt = await _buildAcceptanceCriteriaPrompt(
       ticketTitle: ticketTitle,
       ticketDescription: ticketDescription,
       questionsAndAnswers: questionsAndAnswers,
@@ -361,89 +379,82 @@ class OpenAIProvider implements AIProvider {
     }
   }
   
-  String _buildAcceptanceCriteriaPrompt({
+  Future<String> _buildAcceptanceCriteriaPrompt({
     required String ticketTitle,
     required String ticketDescription,
     required Map<String, String> questionsAndAnswers,
     String? existingDescription,
-  }) {
-    final buffer = StringBuffer();
-    
-    buffer.writeln('You are an experienced Business Analyst creating acceptance criteria.');
-    buffer.writeln('');
-    buffer.writeln('**Original Ticket:**');
-    buffer.writeln('Title: $ticketTitle');
-    buffer.writeln('Description: ${ticketDescription.isEmpty ? "(No description provided)" : ticketDescription}');
-    
-    if (existingDescription != null && existingDescription.isNotEmpty) {
-      buffer.writeln('');
-      buffer.writeln('**Existing Description:**');
-      buffer.writeln(existingDescription);
-    }
-    
-    buffer.writeln('');
-    buffer.writeln('**Questions and Answers:**');
-    buffer.writeln('');
-    questionsAndAnswers.forEach((question, answer) {
-      // Extract just the question text if it's in structured format
-      final questionMatch = RegExp(r'Question:\s*(.+?)(?:\n|$)', multiLine: true)
-          .firstMatch(question);
-      final questionText = questionMatch?.group(1)?.trim() ?? question;
+  }) async {
+    try {
+      // Try to load from JSON config
+      final agentConfig = await _configLoader.loadConfig('ai_acceptance_criteria');
+      final agentParams = agentConfig.params.agentParams;
       
-      buffer.writeln('Q: $questionText');
-      buffer.writeln('A: $answer');
+      // Build Q&A section
+      final qaBuffer = StringBuffer();
+      questionsAndAnswers.forEach((question, answer) {
+        final questionMatch = RegExp(r'Question:\s*(.+?)(?:\n|$)', multiLine: true)
+            .firstMatch(question);
+        final questionText = questionMatch?.group(1)?.trim() ?? question;
+        qaBuffer.writeln('Q: $questionText');
+        qaBuffer.writeln('A: $answer');
+        qaBuffer.writeln('');
+      });
+      
+      // Load prompt template from file
+      String promptTemplate;
+      promptTemplate = await _promptLoader.loadPrompt('acceptance_criteria', {
+        'ticketTitle': ticketTitle,
+        'ticketDescription': ticketDescription.isEmpty 
+            ? '(No description provided)' 
+            : ticketDescription,
+        'questionsAndAnswers': qaBuffer.toString(),
+        if (existingDescription != null && existingDescription.isNotEmpty)
+          'existingDescription': existingDescription,
+      });
+      
+      // Process instructions (load from Confluence if URLs detected)
+      final processedInstructions = await _promptLoader.processInstructions(
+        agentParams.instructions,
+      );
+      
+      // Build final prompt
+      final buffer = StringBuffer();
+      
+      // Add role
+      buffer.writeln('You are ${agentParams.aiRole}.');
       buffer.writeln('');
-    });
-    
-    buffer.writeln('');
-    buffer.writeln('TASK: Create comprehensive Gherkin-style acceptance criteria based on the ticket and all answers.');
-    buffer.writeln('');
-    buffer.writeln('FORMAT: Use this structure:');
-    buffer.writeln('');
-    buffer.writeln('## Acceptance Criteria');
-    buffer.writeln('');
-    buffer.writeln('### Scenario 1: [Scenario Name]');
-    buffer.writeln('');
-    buffer.writeln('**Given** [initial context]');
-    buffer.writeln('**When** [action is performed]');
-    buffer.writeln('**Then** [expected result]');
-    buffer.writeln('**And** [additional conditions]');
-    buffer.writeln('');
-    buffer.writeln('### Scenario 2: [Another Scenario]');
-    buffer.writeln('...');
-    buffer.writeln('');
-    buffer.writeln('REQUIREMENTS:');
-    buffer.writeln('- Use SPECIFIC details from the answers (colors, values, configurations, etc.)');
-    buffer.writeln('- Make criteria TESTABLE and MEASURABLE');
-    buffer.writeln('- Include edge cases and error scenarios');
-    buffer.writeln('- Follow Gherkin Given-When-Then format');
-    buffer.writeln('- Create 2-5 scenarios covering main functionality');
-    buffer.writeln('- Be concrete, not generic');
-    buffer.writeln('');
-    buffer.writeln('EXAMPLE (for reference):');
-    buffer.writeln('');
-    buffer.writeln('## Acceptance Criteria');
-    buffer.writeln('');
-    buffer.writeln('### Scenario 1: User enables dark theme');
-    buffer.writeln('');
-    buffer.writeln('**Given** the user is logged in and on the settings page');
-    buffer.writeln('**When** the user toggles the dark theme switch to ON');
-    buffer.writeln('**Then** the primary background color changes to #1a1a1a');
-    buffer.writeln('**And** the text color changes to #ffffff');
-    buffer.writeln('**And** the accent color changes to #0066cc');
-    buffer.writeln('**And** the theme preference is saved to user profile');
-    buffer.writeln('**And** all UI components respect the dark theme setting');
-    buffer.writeln('');
-    buffer.writeln('### Scenario 2: Theme persists across sessions');
-    buffer.writeln('');
-    buffer.writeln('**Given** the user has enabled dark theme');
-    buffer.writeln('**When** the user logs out and logs back in');
-    buffer.writeln('**Then** the dark theme is still active');
-    buffer.writeln('**And** all pages display with dark theme colors');
-    buffer.writeln('');
-    buffer.writeln('Now generate acceptance criteria for the ticket above:');
-    
-    return buffer.toString();
+      
+      // Add processed instructions
+      for (final instruction in processedInstructions) {
+        buffer.writeln(instruction);
+        buffer.writeln('');
+      }
+      
+      // Add prompt template
+      buffer.write(promptTemplate);
+      
+      // Add few-shot examples if available
+      if (agentParams.fewShots.isNotEmpty) {
+        buffer.writeln('');
+        buffer.writeln('EXAMPLE:');
+        buffer.writeln(agentParams.fewShots);
+      }
+      
+      // Add formatting rules if available
+      if (agentParams.formattingRules.isNotEmpty) {
+        buffer.writeln('');
+        buffer.writeln('FORMATTING RULES:');
+        buffer.writeln(agentParams.formattingRules);
+      }
+      
+      return buffer.toString();
+    } catch (e) {
+      throw Exception(
+        'Failed to load agent config for acceptance criteria generation: $e\n'
+        'Please ensure agents/ai_acceptance_criteria.json exists and is valid JSON.',
+      );
+    }
   }
 }
 

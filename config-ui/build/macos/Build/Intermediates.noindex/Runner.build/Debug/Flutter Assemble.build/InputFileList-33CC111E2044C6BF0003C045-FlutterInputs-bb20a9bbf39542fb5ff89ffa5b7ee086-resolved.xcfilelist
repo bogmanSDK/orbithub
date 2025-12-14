@@ -197,6 +197,13 @@
 /Users/Serhii_Bohush/.pub-cache/hosted/pub.dev/term_glyph-1.2.2/LICENSE
 /Users/Serhii_Bohush/.pub-cache/hosted/pub.dev/test_api-0.7.6/LICENSE
 /Users/Serhii_Bohush/.pub-cache/hosted/pub.dev/url_launcher-6.3.2/LICENSE
+/Users/Serhii_Bohush/.pub-cache/hosted/pub.dev/url_launcher-6.3.2/lib/src/legacy_api.dart
+/Users/Serhii_Bohush/.pub-cache/hosted/pub.dev/url_launcher-6.3.2/lib/src/type_conversion.dart
+/Users/Serhii_Bohush/.pub-cache/hosted/pub.dev/url_launcher-6.3.2/lib/src/types.dart
+/Users/Serhii_Bohush/.pub-cache/hosted/pub.dev/url_launcher-6.3.2/lib/src/url_launcher_string.dart
+/Users/Serhii_Bohush/.pub-cache/hosted/pub.dev/url_launcher-6.3.2/lib/src/url_launcher_uri.dart
+/Users/Serhii_Bohush/.pub-cache/hosted/pub.dev/url_launcher-6.3.2/lib/url_launcher.dart
+/Users/Serhii_Bohush/.pub-cache/hosted/pub.dev/url_launcher-6.3.2/lib/url_launcher_string.dart
 /Users/Serhii_Bohush/.pub-cache/hosted/pub.dev/url_launcher_android-6.3.28/LICENSE
 /Users/Serhii_Bohush/.pub-cache/hosted/pub.dev/url_launcher_android-6.3.28/lib/src/messages.g.dart
 /Users/Serhii_Bohush/.pub-cache/hosted/pub.dev/url_launcher_android-6.3.28/lib/url_launcher_android.dart
@@ -924,6 +931,7 @@
 /Users/Serhii_Bohush/orbithub/config-ui/lib/screens/jira_config_screen.dart
 /Users/Serhii_Bohush/orbithub/config-ui/lib/services/config_service.dart
 /Users/Serhii_Bohush/orbithub/config-ui/lib/utils/env_parser.dart
+/Users/Serhii_Bohush/orbithub/config-ui/lib/widgets/clickable_link_text.dart
 /Users/Serhii_Bohush/orbithub/config-ui/lib/widgets/config_section.dart
 /Users/Serhii_Bohush/orbithub/config-ui/lib/widgets/config_text_field.dart
 /Users/Serhii_Bohush/orbithub/config-ui/lib/widgets/save_button.dart
