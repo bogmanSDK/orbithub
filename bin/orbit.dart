@@ -4,6 +4,10 @@ import 'dart:io';
 import 'package:args/args.dart';
 import 'package:logging/logging.dart';
 import 'package:orbithub/orbithub.dart';
+import 'package:orbithub/mcp/cli/mcp_cli_handler.dart';
+import 'package:orbithub/workflows/git_helper.dart';
+import 'package:orbithub/workflows/pr_helper.dart';
+import 'ai_development.dart' as ai_dev;
 
 /// OrbitHub CLI - Command-line interface for Jira automation
 void main(List<String> arguments) async {
@@ -60,6 +64,36 @@ void main(List<String> arguments) async {
     ..addOption('status', abbr: 's', help: 'Target status name')
     ..addFlag('list', abbr: 'l', help: 'List available transitions', defaultsTo: false);
 
+  // MCP command options
+  final mcpCmd = parser.addCommand('mcp');
+  mcpCmd.addCommand('list');
+  
+  // List command (standalone)
+  final listCmd = parser.addCommand('list');
+  listCmd.addOption('integration', help: 'Filter by integration (e.g., jira)');
+  listCmd.addOption('category', help: 'Filter by category');
+  
+  // AI Teammate command
+  final aiTeammateCmd = parser.addCommand('ai-teammate');
+  aiTeammateCmd.addOption('ticket-key', abbr: 't', help: 'Jira ticket key (e.g., MY-123)', mandatory: true);
+  
+  // AI Development command
+  final aiDevelopmentCmd = parser.addCommand('ai-development');
+  aiDevelopmentCmd.addOption('ticket-key', abbr: 't', help: 'Jira ticket key (e.g., MY-123)', mandatory: true);
+  
+  // Git Operations command (internal use)
+  final gitOpsCmd = parser.addCommand('git-operations');
+  gitOpsCmd.addOption('ticket-key', abbr: 't', help: 'Jira ticket key', mandatory: true);
+  
+  // Create PR command (internal use)
+  final createPrCmd = parser.addCommand('create-pr');
+  createPrCmd.addOption('ticket-key', abbr: 't', help: 'Jira ticket key', mandatory: true);
+  createPrCmd.addOption('branch-name', abbr: 'b', help: 'Git branch name', mandatory: true);
+  
+  // Help command
+  final helpCmd = parser.addCommand('help');
+  helpCmd.addOption('tool', help: 'Show help for specific tool');
+
   try {
     final results = parser.parse(arguments);
 
@@ -69,7 +103,16 @@ void main(List<String> arguments) async {
     }
 
     if (results['version'] as bool) {
-      print('OrbitHub v1.0.0');
+      // Read version from pubspec.yaml
+      final pubspecFile = File('pubspec.yaml');
+      if (await pubspecFile.exists()) {
+        final content = await pubspecFile.readAsString();
+        final versionMatch = RegExp(r'^version:\s*(.+)$', multiLine: true).firstMatch(content);
+        final version = versionMatch?.group(1)?.trim() ?? '1.0.0';
+        print('OrbitHub $version');
+      } else {
+        print('OrbitHub v1.0.0');
+      }
       return;
     }
 
@@ -79,7 +122,68 @@ void main(List<String> arguments) async {
       exit(1);
     }
 
-    // Initialize Jira client
+    // Handle MCP commands
+    if (results.command!.name == 'mcp') {
+      final mcpHandler = McpCliHandler();
+      final mcpArgs = results.command!.arguments;
+      final output = await mcpHandler.processMcpCommand(mcpArgs);
+      print(output);
+      return;
+    }
+
+    // Handle list command
+    if (results.command!.name == 'list') {
+      final mcpHandler = McpCliHandler();
+      final filter = results.command!['integration'] as String? ?? 
+                     results.command!['category'] as String?;
+      final output = await mcpHandler.processMcpCommand(['list', if (filter != null) filter]);
+      print(output);
+      return;
+    }
+
+    // Handle help command
+    if (results.command!.name == 'help') {
+      final toolName = results.command!['tool'] as String?;
+      if (toolName != null) {
+        // TODO: Show tool-specific help
+        print('Help for tool: $toolName\n');
+        print('Use "orbit list" to see all available tools.');
+      } else {
+        _printHelp(parser);
+      }
+      return;
+    }
+    
+    // Handle AI Teammate command
+    if (results.command!.name == 'ai-teammate') {
+      final ticketKey = results.command!['ticket-key'] as String;
+      await _runAiTeammate(ticketKey);
+      return;
+    }
+    
+    // Handle AI Development command
+    if (results.command!.name == 'ai-development') {
+      final ticketKey = results.command!['ticket-key'] as String;
+      await _runAiDevelopment(ticketKey);
+      return;
+    }
+    
+    // Handle Git Operations command (internal)
+    if (results.command!.name == 'git-operations') {
+      final ticketKey = results.command!['ticket-key'] as String;
+      await _runGitOperations(ticketKey);
+      return;
+    }
+    
+    // Handle Create PR command (internal)
+    if (results.command!.name == 'create-pr') {
+      final ticketKey = results.command!['ticket-key'] as String;
+      final branchName = results.command!['branch-name'] as String;
+      await _runCreatePr(ticketKey, branchName);
+      return;
+    }
+
+    // Initialize Jira client for legacy commands
     final config = JiraConfig.fromEnvironment();
     final jira = JiraClient(config);
 
@@ -267,6 +371,217 @@ Future<void> _handleTransitionCommand(JiraClient jira, ArgResults args) async {
   }
 }
 
+Future<void> _runAiTeammate(String ticketKey) async {
+  // Try to find script in multiple locations
+  final possiblePaths = [
+    // When running as source: bin/ai_teammate.dart
+    Platform.script.resolve('ai_teammate.dart').toFilePath(),
+    // When running as compiled binary: look in same directory
+    Platform.resolvedExecutable.replaceAll(RegExp(r'orbithub.*$'), 'ai_teammate.dart'),
+    // Fallback: current directory
+    'bin/ai_teammate.dart',
+    'ai_teammate.dart',
+  ];
+  
+  String? scriptPath;
+  for (final path in possiblePaths) {
+    final file = File(path);
+    if (await file.exists()) {
+      scriptPath = path;
+      break;
+    }
+  }
+  
+  if (scriptPath == null) {
+    // If script not found, try to run directly with dart run
+    // This works when OrbitHub is installed as package
+    final process = await Process.start(
+      'dart',
+      ['run', 'orbithub:ai_teammate', ticketKey],
+      mode: ProcessStartMode.inheritStdio,
+    );
+    final exitCode = await process.exitCode;
+    exit(exitCode);
+  }
+  
+  // Run the script using dart
+  final process = await Process.start(
+    'dart',
+    ['run', scriptPath, ticketKey],
+    mode: ProcessStartMode.inheritStdio,
+  );
+  
+  final exitCode = await process.exitCode;
+  exit(exitCode);
+}
+
+Future<void> _runAiDevelopment(String ticketKey) async {
+  // Call the main function directly (works in compiled binary)
+  await ai_dev.main([ticketKey]);
+}
+
+Future<void> _runGitOperations(String ticketKey) async {
+  try {
+    // Initialize Jira wrapper to get ticket info
+    final wrapper = JiraOperationWrapper();
+    final ticket = await wrapper.getTicket(ticketKey);
+    
+    final ticketSummary = ticket.fields.summary ?? ticketKey;
+    
+    // Extract issue type prefix
+    final issueType = GitHelper.extractIssueTypePrefix(ticketSummary);
+    print('📋 Issue type: $issueType');
+    
+    // Generate unique branch name
+    final branchName = await GitHelper.generateUniqueBranchName(issueType, ticketKey);
+    print('🌿 Branch name: $branchName');
+    
+    // Configure git author
+    print('\n👤 Configuring git author...');
+    final authorConfigured = await GitHelper.configureGitAuthor();
+    if (!authorConfigured) {
+      print('❌ Failed to configure git author');
+      exit(1);
+    }
+    
+    // Prepare commit message
+    final commitMessage = '$ticketKey $ticketSummary';
+    print('💬 Commit message: $commitMessage');
+    
+    // Perform git operations
+    print('\n🚀 Performing git operations...');
+    final result = await GitHelper.performGitOperations(branchName, commitMessage);
+    
+    if (!result.success) {
+      print('❌ Git operations failed: ${result.error}');
+      exit(1);
+    }
+    
+    print('\n✅ Git operations completed successfully');
+    print('   Branch: ${result.branchName}');
+    exit(0);
+  } catch (e, stackTrace) {
+    print('\n❌ ERROR: $e');
+    print('\nStack trace:');
+    print(stackTrace);
+    exit(1);
+  }
+}
+
+Future<void> _runCreatePr(String ticketKey, String branchName) async {
+  try {
+    // Initialize Jira wrapper to get ticket info
+    final wrapper = JiraOperationWrapper();
+    final ticket = await wrapper.getTicket(ticketKey);
+    
+    final ticketSummary = ticket.fields.summary ?? ticketKey;
+    final prTitle = '$ticketKey $ticketSummary';
+    
+    print('📋 PR Title: $prTitle');
+    print('🌿 Branch: $branchName');
+    
+    // Verify outputs/response.md exists
+    final responseFile = File('outputs/response.md');
+    if (!await responseFile.exists()) {
+      print('❌ outputs/response.md not found');
+      print('💡 This file should be created by cursor-agent');
+      exit(1);
+    }
+    
+    print('📄 Using outputs/response.md as PR body');
+    
+    // Create Pull Request
+    print('\n🚀 Creating Pull Request...');
+    final prResult = await PrHelper.createPullRequest(
+      prTitle,
+      'outputs/response.md',
+    );
+    
+    if (!prResult.success) {
+      print('❌ PR creation failed: ${prResult.error}');
+      await PrHelper.postErrorCommentToJira(
+        ticketKey,
+        'Pull Request Creation',
+        prResult.error ?? 'Unknown error',
+      );
+      exit(1);
+    }
+    
+    print('✅ Pull Request created: ${prResult.prUrl ?? "(URL not found)"}');
+    
+    // Move ticket to In Review
+    print('\n🔄 Moving ticket to In Review...');
+    await PrHelper.moveTicketToInReview(ticketKey);
+    
+    // Post comment with PR details
+    print('\n💬 Posting comment to Jira...');
+    await PrHelper.postPrCommentToJira(ticketKey, prResult.prUrl, branchName);
+    
+    // Add ai_developed label
+    print('\n🏷️  Adding ai_developed label...');
+    await PrHelper.addAiDevelopedLabel(ticketKey);
+    
+    print('\n✅ PR creation workflow completed successfully');
+    print('   PR URL: ${prResult.prUrl ?? "Check GitHub"}');
+    print('   Ticket: $ticketKey');
+    exit(0);
+  } catch (e, stackTrace) {
+    print('\n❌ ERROR: $e');
+    print('\nStack trace:');
+    print(stackTrace);
+    
+    // Try to post error comment
+    try {
+      await PrHelper.postErrorCommentToJira(
+        ticketKey,
+        'Workflow Execution',
+        e.toString(),
+      );
+    } catch (_) {
+      // Ignore errors in error reporting
+    }
+    
+    exit(1);
+  }
+}
+
+Future<int> _runScript(String scriptName, List<String> args) async {
+  // Try to find script in multiple locations
+  final possiblePaths = [
+    // When running as source: bin/scriptName
+    Platform.script.resolve(scriptName).toFilePath(),
+    // When running as compiled binary: look relative to executable
+    Platform.resolvedExecutable.replaceAll(RegExp(r'orbithub.*$'), scriptName),
+    // Fallback: current directory
+    'bin/$scriptName',
+    scriptName,
+  ];
+  
+  String? scriptPath;
+  for (final path in possiblePaths) {
+    final file = File(path);
+    if (await file.exists()) {
+      scriptPath = path;
+      break;
+    }
+  }
+  
+  if (scriptPath == null) {
+    print('Error: $scriptName not found');
+    print('Searched in: ${possiblePaths.join(", ")}');
+    return 1;
+  }
+  
+  // Run the script using dart
+  final process = await Process.start(
+    'dart',
+    ['run', scriptPath, ...args],
+    mode: ProcessStartMode.inheritStdio,
+  );
+  
+  return await process.exitCode;
+}
+
 void _printHelp(ArgParser parser) {
   print('''
 OrbitHub - AI-powered Jira automation tool
@@ -274,11 +589,13 @@ OrbitHub - AI-powered Jira automation tool
 Usage: orbit <command> [options]
 
 Commands:
-  ticket      Manage Jira tickets (get, create, update, delete)
-  search      Search tickets with JQL
-  comment     Manage ticket comments
-  subtask     Manage subtasks
-  transition  Manage ticket status transitions
+  ticket          Manage Jira tickets (get, create, update, delete)
+  search          Search tickets with JQL
+  comment         Manage ticket comments
+  subtask         Manage subtasks
+  transition      Manage ticket status transitions
+  ai-teammate     Run AI Teammate workflow (generate questions & AC)
+  ai-development  Run AI Development Phase (implement code & create PR)
 
 Examples:
   # Get ticket
@@ -298,11 +615,19 @@ Examples:
 
   # Move ticket to status
   orbit transition --ticket PROJ-123 --status "In Progress"
+  
+  # Run AI Teammate
+  orbit ai-teammate --ticket-key MY-123
+  
+  # Run AI Development
+  orbit ai-development --ticket-key MY-123
 
 Environment Variables:
   JIRA_BASE_PATH     Jira base URL (e.g., https://company.atlassian.net)
   JIRA_EMAIL         Your Jira email
   JIRA_API_TOKEN     Your Jira API token
+  AI_API_KEY         Your AI provider API key
+  CURSOR_API_KEY     Your Cursor API key (for development phase)
 
 Options:
 ${parser.usage}
