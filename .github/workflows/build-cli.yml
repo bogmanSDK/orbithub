@@ -87,6 +87,9 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+      
       - name: 📥 Download all binaries
         uses: actions/download-artifact@v4
         with:
@@ -94,8 +97,15 @@ jobs:
       
       - name: 📝 Copy install script
         run: |
+          # Move binaries from subdirectories to main directory
+          find binaries -name 'orbithub-*' -type f -exec mv {} binaries/ \;
+          
+          # Copy install script
           cp install.sh binaries/
           chmod +x binaries/install.sh
+          
+          # Clean up empty subdirectories
+          find binaries -type d -empty -delete || true
       
       - name: 📦 Prepare release package
         run: |

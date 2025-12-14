@@ -15,13 +15,12 @@ permissions:
   contents: write
 
 jobs:
-  build-and-release:
+  determine-version:
     runs-on: ubuntu-latest
-    
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
     steps:
-      - name: 📥 Checkout code
-        uses: actions/checkout@v4
-      
       - name: 🔍 Determine version
         id: version
         run: |
@@ -37,12 +36,20 @@ jobs:
           echo "tag=v$VERSION" >> $GITHUB_OUTPUT
           echo "Version: $VERSION"
           echo "Tag: v$VERSION"
-      
-      - name: 🔨 Build CLI binaries
-        id: build
-        uses: ./.github/workflows/build-cli.yml
-        with:
-          version: ${{ steps.version.outputs.tag }}
+  
+  build-binaries:
+    needs: determine-version
+    uses: ./.github/workflows/build-cli.yml
+    with:
+      version: ${{ needs.determine-version.outputs.tag }}
+  
+  create-release:
+    needs: [determine-version, build-binaries]
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
       
       - name: 📥 Download binaries
         uses: actions/download-artifact@v4
@@ -53,12 +60,12 @@ jobs:
       - name: 📝 Create release notes
         run: |
           cat > release/RELEASE_NOTES.md << EOF
-          # OrbitHub ${{ steps.version.outputs.tag }}
+          # OrbitHub ${{ needs.determine-version.outputs.tag }}
           
           ## Installation
           
           \`\`\`bash
-          curl -fsSL https://github.com/bogmanSDK/orbithub/releases/download/${{ steps.version.outputs.tag }}/install.sh | bash
+          curl -fsSL https://github.com/bogmanSDK/orbithub/releases/download/${{ needs.determine-version.outputs.tag }}/install.sh | bash
           \`\`\`
           
           ## What's New
@@ -84,8 +91,8 @@ jobs:
       - name: 🚀 Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ steps.version.outputs.tag }}
-          name: OrbitHub ${{ steps.version.outputs.tag }}
+          tag_name: ${{ needs.determine-version.outputs.tag }}
+          name: OrbitHub ${{ needs.determine-version.outputs.tag }}
           body_path: release/RELEASE_NOTES.md
           files: |
             release/install.sh
