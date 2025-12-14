@@ -4,6 +4,7 @@ import 'package:config_ui/services/config_service.dart';
 import 'package:config_ui/screens/jira_config_screen.dart';
 import 'package:config_ui/screens/ai_config_screen.dart';
 import 'package:config_ui/screens/advanced_config_screen.dart';
+import 'package:config_ui/screens/new_tab_screen.dart';
 import 'package:config_ui/widgets/save_button.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -113,7 +114,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     
     return DefaultTabController(
-      length: 3,
+      length: 4,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('OrbitHub Configuration'),
@@ -125,6 +126,7 @@ class _HomeScreenState extends State<HomeScreen> {
               Tab(icon: Icon(Icons.bug_report), text: 'Jira'),
               Tab(icon: Icon(Icons.psychology), text: 'AI'),
               Tab(icon: Icon(Icons.settings), text: 'Advanced'),
+              Tab(icon: Icon(Icons.tab), text: 'New Tab'),
             ],
           ),
         ),
@@ -145,6 +147,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     config: _config,
                     onConfigChanged: _onConfigChanged,
                   ),
+                  const NewTabScreen(),
                 ],
               ),
             ),
