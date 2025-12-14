@@ -23,6 +23,9 @@ class ConfigModel {
   bool? useMcpTools;
   bool? disableJiraComments;
   
+  // Theme Settings
+  String? themeMode; // 'light', 'dark', or 'system'
+  
   ConfigModel({
     this.jiraBasePath,
     this.jiraEmail,
@@ -37,6 +40,7 @@ class ConfigModel {
     this.cursorApiKey,
     this.useMcpTools = true, // true by default
     this.disableJiraComments = true, // true by default
+    this.themeMode = 'dark', // dark by default
   });
   
   /// Create from .env file content
@@ -68,6 +72,7 @@ class ConfigModel {
       cursorApiKey: envMap['CURSOR_API_KEY']?.isEmpty == true ? null : envMap['CURSOR_API_KEY'],
       useMcpTools: envMap['USE_MCP_TOOLS'] == 'false' ? false : true, // true by default
       disableJiraComments: envMap['DISABLE_JIRA_COMMENTS'] == 'false' ? false : true, // true by default
+      themeMode: envMap['THEME_MODE']?.isEmpty == true ? 'dark' : envMap['THEME_MODE'],
     );
   }
   
@@ -118,6 +123,10 @@ class ConfigModel {
       envMap['DISABLE_JIRA_COMMENTS'] = 'true';
     }
     
+    if (themeMode != null && themeMode!.isNotEmpty) {
+      envMap['THEME_MODE'] = themeMode!;
+    }
+    
     return EnvParser.toEnvFile(envMap);
   }
   
@@ -154,6 +163,7 @@ class ConfigModel {
       cursorApiKey: json['cursorApiKey'] as String?,
       useMcpTools: json['useMcpTools'] as bool?,
       disableJiraComments: json['disableJiraComments'] as bool?,
+      themeMode: json['themeMode'] as String?,
     );
   }
   
@@ -173,6 +183,7 @@ class ConfigModel {
       'cursorApiKey': cursorApiKey,
       'useMcpTools': useMcpTools,
       'disableJiraComments': disableJiraComments,
+      'themeMode': themeMode,
     };
   }
   
@@ -191,6 +202,7 @@ class ConfigModel {
     String? cursorApiKey,
     bool? useMcpTools,
     bool? disableJiraComments,
+    String? themeMode,
   }) {
     return ConfigModel(
       jiraBasePath: jiraBasePath ?? this.jiraBasePath,
@@ -206,6 +218,7 @@ class ConfigModel {
       cursorApiKey: cursorApiKey ?? this.cursorApiKey,
       useMcpTools: useMcpTools ?? this.useMcpTools,
       disableJiraComments: disableJiraComments ?? this.disableJiraComments,
+      themeMode: themeMode ?? this.themeMode,
     );
   }
 }

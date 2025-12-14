@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// Service for managing OrbitHub configuration
 class ConfigService {
   static const String _configPathKey = 'config_file_path';
+  static const String _themeModeKey = 'theme_mode';
   
   /// Get default .env file path
   /// Priority: 1) Saved path, 2) Parent directory (orbithub root), 3) Current directory, 4) Home directory
@@ -129,6 +130,18 @@ class ConfigService {
   Future<bool> configFileExists() async {
     final configPath = await getConfigPath();
     return File(configPath).existsSync();
+  }
+  
+  /// Get theme mode from shared preferences
+  Future<String> getThemeMode() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_themeModeKey) ?? 'dark';
+  }
+  
+  /// Save theme mode to shared preferences
+  Future<void> saveThemeMode(String themeMode) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_themeModeKey, themeMode);
   }
 }
 
