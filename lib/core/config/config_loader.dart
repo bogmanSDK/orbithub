@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:convert';
 import 'package:path/path.dart' as path;
 import 'agent_config.dart';
+import 'asset_path_resolver.dart';
 
 /// Utility for loading and caching agent configurations
 class ConfigLoader {
@@ -9,7 +10,7 @@ class ConfigLoader {
   final Map<String, AgentConfig> _cache = {};
 
   ConfigLoader({String? agentsDirectory})
-      : agentsDirectory = agentsDirectory ?? 'agents';
+      : agentsDirectory = agentsDirectory ?? AssetPathResolver.resolveAgentsDirectory();
 
   /// Load agent config from JSON file
   Future<AgentConfig> loadConfig(String configName) async {

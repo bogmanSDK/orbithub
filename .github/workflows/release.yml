@@ -103,6 +103,8 @@ jobs:
             release/orbithub-linux-amd64.sha256
             release/orbithub-darwin-amd64.sha256
             release/orbithub-windows-amd64.exe.sha256
+            release/lib-prompts.tar.gz
+            release/agents.tar.gz
           draft: false
           prerelease: false
         env:

@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:path/path.dart' as path;
 import '../confluence/confluence_client.dart';
+import 'asset_path_resolver.dart';
 
 /// Utility for loading prompt templates from files or Confluence
 class PromptLoader {
@@ -10,7 +11,7 @@ class PromptLoader {
   PromptLoader({
     this.confluenceClient,
     String? promptsDirectory,
-  }) : promptsDirectory = promptsDirectory ?? 'lib/prompts';
+  }) : promptsDirectory = promptsDirectory ?? AssetPathResolver.resolvePromptsDirectory();
 
   /// Load prompt from file and replace placeholders
   /// 

@@ -154,7 +154,7 @@ check_dart() {
     info "Dart version: $(dart --version 2>&1 | head -n 1)"
 }
 
-# Download OrbitHub binary
+# Download OrbitHub binary and assets
 download_orbithub() {
     local version="$1"
     local platform="$2"
@@ -178,6 +178,39 @@ download_orbithub() {
         if [ ! -L "$BIN_DIR/$BINARY_NAME" ] && [ ! -f "$BIN_DIR/$BINARY_NAME" ]; then
             ln -s "$binary_path" "$BIN_DIR/$BINARY_NAME" 2>/dev/null || cp "$binary_path" "$BIN_DIR/$BINARY_NAME"
         fi
+    fi
+    
+    # Download asset directories (lib/prompts and agents)
+    # These are required for the binary to work correctly
+    # Assets are installed to $INSTALL_DIR (parent of bin directory)
+    progress "Downloading asset directories..."
+    
+    # Create asset directories in install directory (parent of bin)
+    mkdir -p "$INSTALL_DIR/lib/prompts"
+    mkdir -p "$INSTALL_DIR/agents"
+    
+    # Download prompts directory files
+    local prompts_url="https://github.com/${REPO}/releases/download/${version}/lib-prompts.tar.gz"
+    local prompts_tmp=$(mktemp)
+    
+    if curl -sL --fail "$prompts_url" -o "$prompts_tmp" 2>/dev/null; then
+        tar -xzf "$prompts_tmp" -C "$INSTALL_DIR" 2>/dev/null || true
+        rm -f "$prompts_tmp"
+        info "Downloaded prompts directory"
+    else
+        warn "Could not download prompts directory (optional, may use defaults)"
+    fi
+    
+    # Download agents directory files
+    local agents_url="https://github.com/${REPO}/releases/download/${version}/agents.tar.gz"
+    local agents_tmp=$(mktemp)
+    
+    if curl -sL --fail "$agents_url" -o "$agents_tmp" 2>/dev/null; then
+        tar -xzf "$agents_tmp" -C "$INSTALL_DIR" 2>/dev/null || true
+        rm -f "$agents_tmp"
+        info "Downloaded agents directory"
+    else
+        warn "Could not download agents directory (optional, may use defaults)"
     fi
 }
 

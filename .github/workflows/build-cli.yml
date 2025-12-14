@@ -88,7 +88,7 @@ jobs:
         with:
           path: binaries/
       
-      - name: 📝 Copy install script
+      - name: 📝 Copy install script and assets
         shell: bash
         run: |
           # Move binaries from subdirectories to main directory
@@ -97,6 +97,18 @@ jobs:
           # Copy install script
           cp install.sh binaries/
           chmod +x binaries/install.sh
+          
+          # Copy asset directories (lib/prompts and agents) to binaries directory
+          # These will be installed alongside the binary
+          mkdir -p binaries/lib/prompts
+          mkdir -p binaries/agents
+          cp -r lib/prompts/* binaries/lib/prompts/ 2>/dev/null || true
+          cp -r agents/* binaries/agents/ 2>/dev/null || true
+          
+          # Verify assets were copied
+          echo "Assets copied:"
+          ls -la binaries/lib/prompts/ 2>/dev/null || echo "No prompts directory"
+          ls -la binaries/agents/ 2>/dev/null || echo "No agents directory"
           
           # Clean up empty subdirectories
           find binaries -type d -empty -delete || true
@@ -107,7 +119,7 @@ jobs:
           echo "Prepared binaries:"
           ls -lh binaries/ || dir binaries/
           
-          # Create checksums
+          # Create checksums for binaries
           cd binaries
           for file in orbithub-*; do
             if [ -f "$file" ]; then
@@ -118,6 +130,18 @@ jobs:
               fi
             fi
           done
+          
+          # Create tarballs for asset directories
+          if [ -d "lib/prompts" ] && [ "$(ls -A lib/prompts)" ]; then
+            tar -czf lib-prompts.tar.gz -C lib prompts
+            echo "Created lib-prompts.tar.gz"
+          fi
+          
+          if [ -d "agents" ] && [ "$(ls -A agents)" ]; then
+            tar -czf agents.tar.gz agents
+            echo "Created agents.tar.gz"
+          fi
+          
           cd ..
       
       - name: 📤 Upload release artifacts
