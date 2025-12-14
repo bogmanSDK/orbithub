@@ -62,7 +62,7 @@ For Jira to trigger GitHub Actions, you need a PAT:
 3. Settings:
    - **Name**: `Jira Automation - OrbitHub`
    - **Expiration**: Choose duration (e.g., 90 days or No expiration)
-   - **Scopes**: Select `repo` (Full control of private repositories)
+   - **Scopes**: Select `repo` (Full control of repositories)
 4. Click **Generate token**
 5. **COPY THE TOKEN** - you won't see it again!
 
