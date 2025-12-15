@@ -1,42 +1,38 @@
 name: AI Teammate
 
 on:
-  # Trigger manually from GitHub UI
-  workflow_dispatch:
+  # Reusable workflow - called from project repositories
+  workflow_call:
     inputs:
       ticket_key:
         description: 'Jira ticket key (e.g., AIH-1)'
         required: true
         type: string
-      
-  # Trigger via webhook from Jira Automation
-  repository_dispatch:
-    types: [ai-teammate-trigger]
+
+permissions:
+  contents: read
+  pull-requests: read
 
 jobs:
   process-ticket:
     runs-on: ubuntu-latest
     
     steps:
-      - name: 📥 Checkout code
+      # Step 1: Checkout project repository (where ticket context will be prepared)
+      - name: 📥 Checkout project code
         uses: actions/checkout@v4
       
-      - name: 📦 Setup Dart
-        uses: dart-lang/setup-dart@v1
-        with:
-          sdk: stable
-      
-      - name: 📚 Install dependencies
-        run: dart pub get
-      
-      - name: 🔨 Generate code (JSON serialization + MCP tools)
+      # Step 2: Install OrbitHub CLI (latest version from GitHub Releases)
+      - name: 📥 Install OrbitHub CLI
         run: |
-          # Generate JSON serialization files
-          dart run build_runner build --delete-conflicting-outputs
-          # Generate MCP tool files
-          dart run tool/generate_mcp_files.dart
+          curl -fsSL https://github.com/bogmanSDK/orbithub/releases/latest/download/install.sh | bash
+          echo "$HOME/.orbithub/bin" >> $GITHUB_PATH
+          
+          # Verify installation
+          orbithub --version || (echo "Error: OrbitHub installation failed" && exit 1)
       
       - name: 🔧 Setup environment
+        working-directory: orbithub
         env:
           JIRA_BASE_PATH: ${{ secrets.JIRA_BASE_PATH }}
           JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
@@ -62,7 +58,8 @@ jobs:
             echo "⚠️  AI features will be disabled"
           fi
           
-          # Create .env file
+          # Create .env file in project root (not orbithub/)
+          cd "$GITHUB_WORKSPACE"
           echo "JIRA_BASE_PATH=$JIRA_BASE_PATH" >> .env
           echo "JIRA_EMAIL=$JIRA_EMAIL" >> .env
           echo "JIRA_API_TOKEN=$JIRA_API_TOKEN" >> .env
@@ -79,36 +76,24 @@ jobs:
           AI_API_KEY: ${{ secrets.AI_API_KEY }}
           DISABLE_JIRA_COMMENTS: 'true'
         run: |
-          # Get ticket key from either manual trigger or webhook
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            TICKET_KEY="${{ github.event.inputs.ticket_key }}"
-          else
-            TICKET_KEY="${{ github.event.client_payload.ticket_key }}"
-          fi
+          TICKET_KEY="${{ inputs.ticket_key }}"
           
           if [ -z "$TICKET_KEY" ]; then
             echo "❌ Error: Ticket key is empty"
-            echo "Event name: ${{ github.event_name }}"
-            echo "Available inputs: ${{ toJSON(github.event.inputs) }}"
-            echo "Available client_payload: ${{ toJSON(github.event.client_payload) }}"
             exit 1
           fi
           
           echo "🎯 Processing ticket: $TICKET_KEY"
-          dart run bin/ai_teammate.dart "$TICKET_KEY"
+          # Run from project root using OrbitHub CLI
+          cd "$GITHUB_WORKSPACE"
+          orbithub ai-teammate --ticket-key "$TICKET_KEY"
       
       - name: 📊 Summary
         if: always()
         run: |
           echo "### AI Teammate Workflow Complete 🤖" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            TICKET_KEY="${{ github.event.inputs.ticket_key }}"
-          else
-            TICKET_KEY="${{ github.event.client_payload.ticket_key }}"
-          fi
+          TICKET_KEY="${{ inputs.ticket_key }}"
           echo "**Ticket**: $TICKET_KEY" >> $GITHUB_STEP_SUMMARY
           echo "**Status**: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Triggered by**: ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
-
-
+          echo "**Repository**: ${{ github.repository }}" >> $GITHUB_STEP_SUMMARY
