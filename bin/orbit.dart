@@ -8,6 +8,7 @@ import 'package:orbithub/mcp/cli/mcp_cli_handler.dart';
 import 'package:orbithub/workflows/git_helper.dart';
 import 'package:orbithub/workflows/pr_helper.dart';
 import 'package:orbithub/workflows/ai_development_runner.dart';
+import 'package:orbithub/workflows/ai_teammate_runner.dart';
 
 /// OrbitHub CLI - Command-line interface for Jira automation
 void main(List<String> arguments) async {
@@ -372,47 +373,8 @@ Future<void> _handleTransitionCommand(JiraClient jira, ArgResults args) async {
 }
 
 Future<void> _runAiTeammate(String ticketKey) async {
-  // Try to find script in multiple locations
-  final possiblePaths = [
-    // When running as source: bin/ai_teammate.dart
-    Platform.script.resolve('ai_teammate.dart').toFilePath(),
-    // When running as compiled binary: look in same directory
-    Platform.resolvedExecutable.replaceAll(RegExp(r'orbithub.*$'), 'ai_teammate.dart'),
-    // Fallback: current directory
-    'bin/ai_teammate.dart',
-    'ai_teammate.dart',
-  ];
-  
-  String? scriptPath;
-  for (final path in possiblePaths) {
-    final file = File(path);
-    if (await file.exists()) {
-      scriptPath = path;
-      break;
-    }
-  }
-  
-  if (scriptPath == null) {
-    // If script not found, try to run directly with dart run
-    // This works when OrbitHub is installed as package
-    final process = await Process.start(
-      'dart',
-      ['run', 'orbithub:ai_teammate', ticketKey],
-      mode: ProcessStartMode.inheritStdio,
-    );
-    final exitCode = await process.exitCode;
-    exit(exitCode);
-  }
-  
-  // Run the script using dart
-  final process = await Process.start(
-    'dart',
-    ['run', scriptPath, ticketKey],
-    mode: ProcessStartMode.inheritStdio,
-  );
-  
-  final exitCode = await process.exitCode;
-  exit(exitCode);
+  // Call the library function directly (works in compiled binary)
+  await runAiTeammate(ticketKey);
 }
 
 Future<void> _runAiDevelopment(String ticketKey) async {
