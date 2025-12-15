@@ -28,6 +28,9 @@ jobs:
           curl -fsSL https://github.com/bogmanSDK/orbithub/releases/latest/download/install.sh | bash
           echo "$HOME/.orbithub/bin" >> $GITHUB_PATH
           
+          # Export PATH for current shell session
+          export PATH="$HOME/.orbithub/bin:$PATH"
+          
           # Verify installation
           orbithub --version || (echo "Error: OrbitHub installation failed" && exit 1)
       
